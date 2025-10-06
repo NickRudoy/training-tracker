@@ -1,9 +1,11 @@
 package main
 
 import (
+    "fmt"
     "log"
     "net/http"
     "os"
+    "sort"
     "time"
 
     "github.com/gin-contrib/cors"
@@ -15,6 +17,15 @@ import (
 type Profile struct {
     ID        uint      `json:"id" gorm:"primaryKey"`
     Name      string    `json:"name" gorm:"not null"`
+    // Личные параметры
+    Age       *int      `json:"age"`                // Возраст
+    Gender    string    `json:"gender"`             // male/female/other
+    Weight    *float64  `json:"weight"`             // Вес в кг
+    Height    *int      `json:"height"`             // Рост в см
+    Goal      string    `json:"goal"`               // strength/mass/endurance/weight_loss
+    // Дополнительные параметры
+    Experience string   `json:"experience"`         // beginner/intermediate/advanced
+    Notes      string   `json:"notes" gorm:"type:text"` // Заметки
     CreatedAt time.Time `json:"createdAt"`
     UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -49,6 +60,44 @@ type OneRMResponse struct {
 type SetValues struct {
     Reps   int     `json:"reps"`
     Weight float64 `json:"kg"`
+}
+
+// AnalyticsResponse - ответ с аналитикой профиля
+type AnalyticsResponse struct {
+    Profile              ProfileStats         `json:"profile"`
+    Progress             ProgressStats        `json:"progress"`
+    MuscleGroupBalance   []MuscleGroupStat    `json:"muscleGroupBalance"`
+    Recommendations      []string             `json:"recommendations"`
+    ExerciseStats        []ExerciseStat       `json:"exerciseStats"`
+}
+
+type ProfileStats struct {
+    TotalWorkouts        int     `json:"totalWorkouts"`
+    TotalExercises       int     `json:"totalExercises"`
+    TotalVolume          float64 `json:"totalVolume"` // Общий объем (кг * повторы)
+    AverageIntensity     float64 `json:"averageIntensity"`
+    BMI                  *float64 `json:"bmi,omitempty"`
+}
+
+type ProgressStats struct {
+    WeightProgress       float64  `json:"weightProgress"`      // % изменения весов
+    VolumeProgress       float64  `json:"volumeProgress"`      // % изменения объема
+    FrequencyPerWeek     float64  `json:"frequencyPerWeek"`    // Тренировок в неделю
+    MostImprovedExercise string   `json:"mostImprovedExercise"`
+}
+
+type MuscleGroupStat struct {
+    MuscleGroup string  `json:"muscleGroup"`
+    Count       int     `json:"count"`
+    Volume      float64 `json:"volume"`
+    Percentage  float64 `json:"percentage"`
+}
+
+type ExerciseStat struct {
+    Exercise    string  `json:"exercise"`
+    MaxWeight   float64 `json:"maxWeight"`
+    TotalVolume float64 `json:"totalVolume"`
+    Progress    float64 `json:"progress"` // % роста за период
 }
 
 type Training struct {
@@ -274,7 +323,9 @@ func main() {
         {
             profiles.GET("", func(c *gin.Context) { handleListProfiles(c, db) })
             profiles.POST("", func(c *gin.Context) { handleCreateProfile(c, db) })
+            profiles.PUT(":id", func(c *gin.Context) { handleUpdateProfile(c, db) })
             profiles.DELETE(":id", func(c *gin.Context) { handleDeleteProfile(c, db) })
+            profiles.GET(":id/analytics", func(c *gin.Context) { handleGetAnalytics(c, db) })
         }
 
         // Калькулятор 1ПМ
@@ -575,6 +626,28 @@ func handleCreateProfile(c *gin.Context, db *gorm.DB) {
     c.JSON(http.StatusCreated, input)
 }
 
+func handleUpdateProfile(c *gin.Context, db *gorm.DB) {
+    id := c.Param("id")
+    var profile Profile
+    
+    if err := db.First(&profile, id).Error; err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+        return
+    }
+    
+    if err := c.ShouldBindJSON(&profile); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+    
+    if err := db.Save(&profile).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    
+    c.JSON(http.StatusOK, profile)
+}
+
 func handleDeleteProfile(c *gin.Context, db *gorm.DB) {
     id := c.Param("id")
     
@@ -595,6 +668,356 @@ func handleDeleteProfile(c *gin.Context, db *gorm.DB) {
         return
     }
     c.Status(http.StatusNoContent)
+}
+
+func handleGetAnalytics(c *gin.Context, db *gorm.DB) {
+    profileID := c.Param("id")
+    
+    var profile Profile
+    if err := db.First(&profile, profileID).Error; err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+        return
+    }
+    
+    var trainings []Training
+    db.Where("profile_id = ?", profileID).Find(&trainings)
+    
+    // Получаем все упражнения для привязки к мышечным группам
+    var exercises []Exercise
+    db.Find(&exercises)
+    exerciseMap := make(map[string]Exercise)
+    for _, ex := range exercises {
+        exerciseMap[ex.Name] = ex
+    }
+    
+    analytics := calculateAnalytics(profile, trainings, exerciseMap)
+    c.JSON(http.StatusOK, analytics)
+}
+
+func calculateAnalytics(profile Profile, trainings []Training, exerciseMap map[string]Exercise) AnalyticsResponse {
+    profileStats := calculateProfileStats(profile, trainings)
+    progress := calculateProgress(trainings)
+    muscleBalance := calculateMuscleGroupBalance(trainings, exerciseMap)
+    exerciseStats := calculateExerciseStats(trainings)
+    recommendations := generateRecommendations(profile, trainings, muscleBalance, exerciseStats)
+    
+    return AnalyticsResponse{
+        Profile:            profileStats,
+        Progress:           progress,
+        MuscleGroupBalance: muscleBalance,
+        ExerciseStats:      exerciseStats,
+        Recommendations:    recommendations,
+    }
+}
+
+func calculateProfileStats(profile Profile, trainings []Training) ProfileStats {
+    totalWorkouts := len(trainings)
+    exerciseSet := make(map[string]bool)
+    var totalVolume float64
+    
+    for _, t := range trainings {
+        if t.Exercise != "" {
+            exerciseSet[t.Exercise] = true
+        }
+        // Подсчет объема (вес * повторы)
+        for i := 1; i <= 4; i++ {
+            for j := 1; j <= 6; j++ {
+                repsField := fmt.Sprintf("Week%dD%dReps", i, j)
+                kgField := fmt.Sprintf("Week%dD%dKg", i, j)
+                
+                // Используем рефлексию для доступа к динамическим полям
+                repsValue := getFieldValue(t, repsField)
+                kgValue := getFieldValue(t, kgField)
+                
+                totalVolume += float64(repsValue) * kgValue
+            }
+        }
+    }
+    
+    stats := ProfileStats{
+        TotalWorkouts:    totalWorkouts,
+        TotalExercises:   len(exerciseSet),
+        TotalVolume:      totalVolume,
+        AverageIntensity: 0,
+    }
+    
+    // Рассчитываем BMI если есть данные
+    if profile.Weight != nil && profile.Height != nil && *profile.Height > 0 {
+        heightM := float64(*profile.Height) / 100.0
+        bmi := *profile.Weight / (heightM * heightM)
+        stats.BMI = &bmi
+    }
+    
+    return stats
+}
+
+func calculateProgress(trainings []Training) ProgressStats {
+    if len(trainings) == 0 {
+        return ProgressStats{}
+    }
+    
+    // Группируем по упражнениям и смотрим прогресс
+    exerciseProgress := make(map[string][]float64)
+    
+    for _, t := range trainings {
+        if t.Exercise == "" {
+            continue
+        }
+        
+        var maxWeight float64
+        for i := 1; i <= 4; i++ {
+            for j := 1; j <= 6; j++ {
+                kgField := fmt.Sprintf("Week%dD%dKg", i, j)
+                kg := getFieldValue(t, kgField)
+                if kg > maxWeight {
+                    maxWeight = kg
+                }
+            }
+        }
+        
+        if maxWeight > 0 {
+            exerciseProgress[t.Exercise] = append(exerciseProgress[t.Exercise], maxWeight)
+        }
+    }
+    
+    // Находим упражнение с наибольшим прогрессом
+    var mostImproved string
+    var maxProgressPercent float64
+    
+    for exercise, weights := range exerciseProgress {
+        if len(weights) >= 2 {
+            firstWeight := weights[0]
+            lastWeight := weights[len(weights)-1]
+            progressPercent := ((lastWeight - firstWeight) / firstWeight) * 100
+            
+            if progressPercent > maxProgressPercent {
+                maxProgressPercent = progressPercent
+                mostImproved = exercise
+            }
+        }
+    }
+    
+    return ProgressStats{
+        WeightProgress:       maxProgressPercent,
+        VolumeProgress:       0, // TODO: рассчитать изменение объема
+        FrequencyPerWeek:     float64(len(trainings)) / 4.0, // Предполагаем 4 недели
+        MostImprovedExercise: mostImproved,
+    }
+}
+
+func calculateMuscleGroupBalance(trainings []Training, exerciseMap map[string]Exercise) []MuscleGroupStat {
+    muscleGroups := make(map[string]*MuscleGroupStat)
+    var totalVolume float64
+    
+    for _, t := range trainings {
+        ex, exists := exerciseMap[t.Exercise]
+        if !exists || ex.MuscleGroup == "" {
+            continue
+        }
+        
+        if muscleGroups[ex.MuscleGroup] == nil {
+            muscleGroups[ex.MuscleGroup] = &MuscleGroupStat{
+                MuscleGroup: ex.MuscleGroup,
+            }
+        }
+        
+        muscleGroups[ex.MuscleGroup].Count++
+        
+        // Подсчет объема для группы мышц
+        for i := 1; i <= 4; i++ {
+            for j := 1; j <= 6; j++ {
+                repsField := fmt.Sprintf("Week%dD%dReps", i, j)
+                kgField := fmt.Sprintf("Week%dD%dKg", i, j)
+                
+                reps := getFieldValue(t, repsField)
+                kg := getFieldValue(t, kgField)
+                volume := float64(reps) * kg
+                
+                muscleGroups[ex.MuscleGroup].Volume += volume
+                totalVolume += volume
+            }
+        }
+    }
+    
+    // Преобразуем в слайс и рассчитываем проценты
+    result := make([]MuscleGroupStat, 0, len(muscleGroups))
+    for _, stat := range muscleGroups {
+        if totalVolume > 0 {
+            stat.Percentage = (stat.Volume / totalVolume) * 100
+        }
+        result = append(result, *stat)
+    }
+    
+    // Сортируем по объему
+    sort.Slice(result, func(i, j int) bool {
+        return result[i].Volume > result[j].Volume
+    })
+    
+    return result
+}
+
+func calculateExerciseStats(trainings []Training) []ExerciseStat {
+    exerciseData := make(map[string]*ExerciseStat)
+    
+    for _, t := range trainings {
+        if t.Exercise == "" {
+            continue
+        }
+        
+        if exerciseData[t.Exercise] == nil {
+            exerciseData[t.Exercise] = &ExerciseStat{
+                Exercise: t.Exercise,
+            }
+        }
+        
+        var maxWeight float64
+        var totalVolume float64
+        
+        for i := 1; i <= 4; i++ {
+            for j := 1; j <= 6; j++ {
+                repsField := fmt.Sprintf("Week%dD%dReps", i, j)
+                kgField := fmt.Sprintf("Week%dD%dKg", i, j)
+                
+                reps := getFieldValue(t, repsField)
+                kg := getFieldValue(t, kgField)
+                
+                if kg > maxWeight {
+                    maxWeight = kg
+                }
+                totalVolume += float64(reps) * kg
+            }
+        }
+        
+        if maxWeight > exerciseData[t.Exercise].MaxWeight {
+            exerciseData[t.Exercise].MaxWeight = maxWeight
+        }
+        exerciseData[t.Exercise].TotalVolume += totalVolume
+    }
+    
+    result := make([]ExerciseStat, 0, len(exerciseData))
+    for _, stat := range exerciseData {
+        result = append(result, *stat)
+    }
+    
+    // Сортируем по общему объему
+    sort.Slice(result, func(i, j int) bool {
+        return result[i].TotalVolume > result[j].TotalVolume
+    })
+    
+    return result
+}
+
+func generateRecommendations(profile Profile, trainings []Training, muscleBalance []MuscleGroupStat, exerciseStats []ExerciseStat) []string {
+    recommendations := []string{}
+    
+    // Рекомендации по BMI
+    if profile.Weight != nil && profile.Height != nil && *profile.Height > 0 {
+        heightM := float64(*profile.Height) / 100.0
+        bmi := *profile.Weight / (heightM * heightM)
+        if bmi < 18.5 {
+            recommendations = append(recommendations, "⚠️ Ваш BMI ниже нормы. Рекомендуется увеличить калорийность питания и сосредоточиться на наборе мышечной массы.")
+        } else if bmi > 25 {
+            recommendations = append(recommendations, "⚠️ Ваш BMI выше нормы. Рекомендуется добавить кардио и контролировать калорийность питания.")
+        }
+    }
+    
+    // Рекомендации по балансу мышечных групп
+    if len(muscleBalance) > 0 {
+        maxVolume := muscleBalance[0].Volume
+        for _, mg := range muscleBalance {
+            if mg.Volume < maxVolume*0.3 { // Если группа мышц тренируется менее 30% от максимума
+                recommendations = append(recommendations, fmt.Sprintf("💪 Уделите больше внимания группе мышц: %s (всего %.1f%% от общего объема)", mg.MuscleGroup, mg.Percentage))
+            }
+        }
+    }
+    
+    // Рекомендации по частоте тренировок
+    if len(trainings) < 8 { // Менее 2 тренировок в неделю
+        recommendations = append(recommendations, "📅 Рекомендуется увеличить частоту тренировок до 3-4 раз в неделю для лучших результатов.")
+    }
+    
+    // Рекомендации по разнообразию упражнений
+    if len(exerciseStats) < 5 {
+        recommendations = append(recommendations, "🎯 Добавьте больше разнообразия в программу. Рекомендуется выполнять 8-12 различных упражнений.")
+    }
+    
+    // Рекомендации на основе цели
+    switch profile.Goal {
+    case "strength":
+        recommendations = append(recommendations, "💪 Для развития силы фокусируйтесь на весах 85-95% от 1ПМ с 1-5 повторениями.")
+    case "mass":
+        recommendations = append(recommendations, "🏋️ Для роста массы оптимальны веса 70-85% от 1ПМ с 6-12 повторениями.")
+    case "endurance":
+        recommendations = append(recommendations, "🏃 Для развития выносливости используйте веса 50-70% от 1ПМ с 15-20+ повторениями.")
+    case "weight_loss":
+        recommendations = append(recommendations, "🔥 Для похудения сочетайте силовые тренировки с кардио и контролируйте калорийность.")
+    }
+    
+    if len(recommendations) == 0 {
+        recommendations = append(recommendations, "✅ Отличная работа! Продолжайте в том же духе.")
+    }
+    
+    return recommendations
+}
+
+func getFieldValue(t Training, fieldName string) float64 {
+    // Простой хелпер для получения значений полей тренировки
+    // В реальности здесь можно использовать reflect, но для простоты сделаем switch
+    switch fieldName {
+    case "Week1D1Reps": return float64(t.Week1D1Reps)
+    case "Week1D1Kg": return float64(t.Week1D1Kg)
+    case "Week1D2Reps": return float64(t.Week1D2Reps)
+    case "Week1D2Kg": return float64(t.Week1D2Kg)
+    case "Week1D3Reps": return float64(t.Week1D3Reps)
+    case "Week1D3Kg": return float64(t.Week1D3Kg)
+    case "Week1D4Reps": return float64(t.Week1D4Reps)
+    case "Week1D4Kg": return float64(t.Week1D4Kg)
+    case "Week1D5Reps": return float64(t.Week1D5Reps)
+    case "Week1D5Kg": return float64(t.Week1D5Kg)
+    case "Week1D6Reps": return float64(t.Week1D6Reps)
+    case "Week1D6Kg": return float64(t.Week1D6Kg)
+    // Week 2
+    case "Week2D1Reps": return float64(t.Week2D1Reps)
+    case "Week2D1Kg": return float64(t.Week2D1Kg)
+    case "Week2D2Reps": return float64(t.Week2D2Reps)
+    case "Week2D2Kg": return float64(t.Week2D2Kg)
+    case "Week2D3Reps": return float64(t.Week2D3Reps)
+    case "Week2D3Kg": return float64(t.Week2D3Kg)
+    case "Week2D4Reps": return float64(t.Week2D4Reps)
+    case "Week2D4Kg": return float64(t.Week2D4Kg)
+    case "Week2D5Reps": return float64(t.Week2D5Reps)
+    case "Week2D5Kg": return float64(t.Week2D5Kg)
+    case "Week2D6Reps": return float64(t.Week2D6Reps)
+    case "Week2D6Kg": return float64(t.Week2D6Kg)
+    // Week 3
+    case "Week3D1Reps": return float64(t.Week3D1Reps)
+    case "Week3D1Kg": return float64(t.Week3D1Kg)
+    case "Week3D2Reps": return float64(t.Week3D2Reps)
+    case "Week3D2Kg": return float64(t.Week3D2Kg)
+    case "Week3D3Reps": return float64(t.Week3D3Reps)
+    case "Week3D3Kg": return float64(t.Week3D3Kg)
+    case "Week3D4Reps": return float64(t.Week3D4Reps)
+    case "Week3D4Kg": return float64(t.Week3D4Kg)
+    case "Week3D5Reps": return float64(t.Week3D5Reps)
+    case "Week3D5Kg": return float64(t.Week3D5Kg)
+    case "Week3D6Reps": return float64(t.Week3D6Reps)
+    case "Week3D6Kg": return float64(t.Week3D6Kg)
+    // Week 4
+    case "Week4D1Reps": return float64(t.Week4D1Reps)
+    case "Week4D1Kg": return float64(t.Week4D1Kg)
+    case "Week4D2Reps": return float64(t.Week4D2Reps)
+    case "Week4D2Kg": return float64(t.Week4D2Kg)
+    case "Week4D3Reps": return float64(t.Week4D3Reps)
+    case "Week4D3Kg": return float64(t.Week4D3Kg)
+    case "Week4D4Reps": return float64(t.Week4D4Reps)
+    case "Week4D4Kg": return float64(t.Week4D4Kg)
+    case "Week4D5Reps": return float64(t.Week4D5Reps)
+    case "Week4D5Kg": return float64(t.Week4D5Kg)
+    case "Week4D6Reps": return float64(t.Week4D6Reps)
+    case "Week4D6Kg": return float64(t.Week4D6Kg)
+    default:
+        return 0
+    }
 }
 
 

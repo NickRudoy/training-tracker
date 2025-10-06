@@ -4,6 +4,7 @@ import axios from 'axios'
 import TrainingTable, { Training } from '../components/TrainingTable'
 import { Exercise } from '../components/ExerciseSelector'
 import ProfileSelector, { Profile } from '../components/ProfileSelector'
+import ProfileSettings from '../components/ProfileSettings'
 import { Button } from '@heroui/react'
 
 const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080' })
@@ -17,6 +18,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null)
   const [visibleWeeks, setVisibleWeeks] = useState<number>(1)
   const [isSaving, setIsSaving] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   async function fetchProfiles() {
@@ -24,7 +26,19 @@ export default function HomePage() {
       const res = await api.get<Profile[]>('/api/profiles')
       setProfiles(res.data)
       if (res.data.length > 0 && !currentProfile) {
-        setCurrentProfile(res.data[0])
+        // Пытаемся загрузить последний выбранный профиль из localStorage
+        const savedProfileId = localStorage.getItem('currentProfileId')
+        const savedProfile = savedProfileId 
+          ? res.data.find(p => p.id === parseInt(savedProfileId))
+          : null
+        
+        const profileToSet = savedProfile || res.data[0]
+        setCurrentProfile(profileToSet)
+        
+        // Сохраняем в localStorage, если не было сохранено
+        if (!savedProfileId) {
+          localStorage.setItem('currentProfileId', profileToSet.id.toString())
+        }
       }
     } catch (e: any) {
       console.error('Failed to load profiles:', e)
@@ -157,6 +171,7 @@ export default function HomePage() {
       const res = await api.post<Profile>('/api/profiles', { name })
       setProfiles([...profiles, res.data])
       setCurrentProfile(res.data)
+      localStorage.setItem('currentProfileId', res.data.id.toString())
     } catch (e: any) {
       console.error('Failed to create profile:', e)
       throw e
@@ -170,9 +185,34 @@ export default function HomePage() {
       setProfiles(newProfiles)
       if (currentProfile?.id === id && newProfiles.length > 0) {
         setCurrentProfile(newProfiles[0])
+        localStorage.setItem('currentProfileId', newProfiles[0].id.toString())
       }
     } catch (e: any) {
       console.error('Failed to delete profile:', e)
+      throw e
+    }
+  }
+
+  // Сохраняем выбранный профиль в localStorage при его смене
+  const handleProfileChange = (profile: Profile) => {
+    setCurrentProfile(profile)
+    localStorage.setItem('currentProfileId', profile.id.toString())
+  }
+
+  async function updateProfile(profileData: Partial<Profile>) {
+    if (!currentProfile) return
+    
+    try {
+      const res = await api.put<Profile>(`/api/profiles/${currentProfile.id}`, {
+        ...currentProfile,
+        ...profileData
+      })
+      
+      // Обновляем список профилей
+      setProfiles(profiles.map(p => p.id === currentProfile.id ? res.data : p))
+      setCurrentProfile(res.data)
+    } catch (e: any) {
+      console.error('Failed to update profile:', e)
       throw e
     }
   }
@@ -201,10 +241,21 @@ export default function HomePage() {
               <ProfileSelector
                 profiles={profiles}
                 currentProfile={currentProfile}
-                onSelectProfile={setCurrentProfile}
+                onSelectProfile={handleProfileChange}
                 onCreateProfile={createProfile}
                 onDeleteProfile={deleteProfile}
               />
+              <Button
+                size="sm"
+                onPress={() => setIsSettingsOpen(true)}
+                className="h-10 md:h-11 min-w-[44px] px-3 md:px-4 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+                title="Настройки профиля"
+              >
+                <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </Button>
               {isSaving && (
                 <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 animate-fadeIn">
                   <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -302,6 +353,14 @@ export default function HomePage() {
         onAddRow={addRow}
         onAddCustomExercise={addCustomExercise}
         visibleWeeks={visibleWeeks}
+      />
+
+      {/* Profile Settings Modal */}
+      <ProfileSettings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        profile={currentProfile}
+        onSave={updateProfile}
       />
     </div>
   )

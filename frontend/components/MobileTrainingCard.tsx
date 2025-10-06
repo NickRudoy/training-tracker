@@ -11,6 +11,7 @@ type Props = {
   weekFilter: number
   visibleWeeks: number
   onDelete: () => void
+  onSave: () => void
   onOpen1RM: () => void
   onAddCustomExercise: (exercise: Omit<Exercise, 'id' | 'isCustom'>) => Promise<void>
   onChangeCell: (key: keyof Training, value: string) => void
@@ -22,6 +23,7 @@ export default function MobileTrainingCard({
   weekFilter,
   visibleWeeks,
   onDelete,
+  onSave,
   onOpen1RM,
   onAddCustomExercise,
   onChangeCell,
@@ -42,7 +44,17 @@ export default function MobileTrainingCard({
               className="w-full px-4 py-3 text-base font-bold rounded-xl bg-white/20 backdrop-blur-sm text-white placeholder:text-white/60 border-2 border-white/30 focus:border-white focus:bg-white/30 focus:outline-none transition-all shadow-lg"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              size="sm"
+              onPress={onSave}
+              className="h-10 min-w-[44px] px-3 rounded-xl bg-emerald-500/30 backdrop-blur-sm border-2 border-emerald-300/40 text-white hover:bg-emerald-500/40 transition-all shadow-lg font-semibold"
+              title="Сохранить"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </Button>
             <Button
               size="sm"
               onPress={onOpen1RM}

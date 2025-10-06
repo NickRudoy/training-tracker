@@ -50,9 +50,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <ThemeToggle />
                 </div>
                 <nav className="hidden md:flex items-center gap-6 text-sm text-slate-600 dark:text-slate-300">
-                  <span className="hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-default">Главная</span>
-                  <span className="hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-default">История</span>
-                  <span className="hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-default">Настройки</span>
+                  <a href="/" className="hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer font-medium">Главная</a>
+                  <a href="/analytics" className="hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer font-medium">Аналитика</a>
                   <ThemeToggle />
                 </nav>
               </div>

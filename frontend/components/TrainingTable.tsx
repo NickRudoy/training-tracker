@@ -534,6 +534,7 @@ export default function TrainingTable({ data, exercises, onChangeCell, onSaveRow
                 weekFilter={weekFilter}
                 visibleWeeks={visibleWeeks}
                 onDelete={() => onDeleteRow(rowIndex)}
+                onSave={() => onSaveRow(rowIndex)}
                 onOpen1RM={() => open1RMCalculator(rowIndex)}
                 onAddCustomExercise={onAddCustomExercise}
                 onChangeCell={(key, val) => onChangeCell(rowIndex, key, val)}
