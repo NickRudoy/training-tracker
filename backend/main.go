@@ -4,12 +4,20 @@ import (
     "log"
     "net/http"
     "os"
+    "time"
 
     "github.com/gin-contrib/cors"
     "github.com/gin-gonic/gin"
     "gorm.io/driver/postgres"
     "gorm.io/gorm"
 )
+
+type Profile struct {
+    ID        uint      `json:"id" gorm:"primaryKey"`
+    Name      string    `json:"name" gorm:"not null"`
+    CreatedAt time.Time `json:"createdAt"`
+    UpdatedAt time.Time `json:"updatedAt"`
+}
 
 type Exercise struct {
     ID          uint   `json:"id" gorm:"primaryKey"`
@@ -20,10 +28,34 @@ type Exercise struct {
     IsCustom    bool   `json:"isCustom" gorm:"default:false"`
 }
 
+// OneRMRequest - запрос на расчет 1ПМ
+type OneRMRequest struct {
+    Weight     float64 `json:"weight" binding:"required,gt=0"`
+    Reps       int     `json:"reps" binding:"required,gt=0,lte=20"`
+    Percentage float64 `json:"percentage" binding:"required,gte=50,lte=100"`
+    Formula    string  `json:"formula"` // brzycki, epley, lander (по умолчанию brzycki)
+}
+
+// OneRMResponse - ответ с расчетом 1ПМ
+type OneRMResponse struct {
+    OneRM         float64       `json:"oneRM"`
+    TargetWeight  float64       `json:"targetWeight"`
+    Percentage    float64       `json:"percentage"`
+    Formula       string        `json:"formula"`
+    Sets          []SetValues   `json:"sets"`
+}
+
+// SetValues - значения для одного подхода
+type SetValues struct {
+    Reps   int     `json:"reps"`
+    Weight float64 `json:"kg"`
+}
+
 type Training struct {
-    ID       uint   `json:"id" gorm:"primaryKey"`
-    Exercise string `json:"exercise"`
-    Weeks    int    `json:"weeks"`
+    ID        uint   `json:"id" gorm:"primaryKey"`
+    ProfileID uint   `json:"profileId" gorm:"not null;index"`
+    Exercise  string `json:"exercise"`
+    Weeks     int    `json:"weeks"`
     Week1D1Reps int `json:"week1d1Reps"`
     Week1D1Kg   int `json:"week1d1Kg"`
     Week1D2Reps int `json:"week1d2Reps"`
@@ -81,6 +113,71 @@ func getEnv(key, def string) string {
     return def
 }
 
+// Формулы расчета 1ПМ (повторного максимума)
+
+// calculateBrzycki - формула Brzycki (самая популярная)
+// 1RM = weight × (36 / (37 - reps))
+func calculateBrzycki(weight float64, reps int) float64 {
+    if reps == 1 {
+        return weight
+    }
+    return weight * (36.0 / (37.0 - float64(reps)))
+}
+
+// calculateEpley - формула Epley
+// 1RM = weight × (1 + reps / 30)
+func calculateEpley(weight float64, reps int) float64 {
+    if reps == 1 {
+        return weight
+    }
+    return weight * (1.0 + float64(reps)/30.0)
+}
+
+// calculateLander - формула Lander
+// 1RM = (100 × weight) / (101.3 - 2.67123 × reps)
+func calculateLander(weight float64, reps int) float64 {
+    if reps == 1 {
+        return weight
+    }
+    return (100.0 * weight) / (101.3 - 2.67123*float64(reps))
+}
+
+// calculate1RM - вычисляет 1ПМ по выбранной формуле
+func calculate1RM(weight float64, reps int, formula string) float64 {
+    switch formula {
+    case "epley":
+        return calculateEpley(weight, reps)
+    case "lander":
+        return calculateLander(weight, reps)
+    default: // brzycki
+        return calculateBrzycki(weight, reps)
+    }
+}
+
+// calculateTargetReps - определяет целевое количество повторений на основе процента от 1ПМ
+func calculateTargetReps(percentage float64) int {
+    switch {
+    case percentage >= 90:
+        return 3 // Сила
+    case percentage >= 85:
+        return 5 // Мощность
+    case percentage >= 75:
+        return 8 // Гипертрофия
+    case percentage >= 65:
+        return 12 // Выносливость
+    default:
+        return 15 // Легкая нагрузка
+    }
+}
+
+// round - округление до целого
+func round(val float64) float64 {
+    if val < 0 {
+        return float64(int(val - 0.5))
+    }
+    return float64(int(val + 0.5))
+}
+
 func main() {
     dsn := getEnv("POSTGRES_DSN", "host=localhost user=traininguser password=trainingpass dbname=trainingdb port=5432 sslmode=disable TimeZone=UTC")
     db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -88,12 +185,62 @@ func main() {
         log.Fatalf("failed to connect database: %v", err)
     }
 
-    if err := db.AutoMigrate(&Training{}, &Exercise{}); err != nil {
-        log.Fatalf("failed to migrate: %v", err)
+    // Step 1: Migrate Profile and Exercise first
+    if err := db.AutoMigrate(&Profile{}, &Exercise{}); err != nil {
+        log.Fatalf("failed to migrate Profile and Exercise: %v", err)
     }
 
-    // Seed exercises if the table is empty
+    // Step 2: Seed default profile and exercises
+    seedProfiles(db)
     seedExercises(db)
+
+    // Step 3: Ensure default profile exists
+    var defaultProfile Profile
+    if err := db.First(&defaultProfile).Error; err != nil {
+        log.Fatalf("default profile not found: %v", err)
+    }
+
+    // Step 4: Check if we need to migrate existing trainings table
+    type TrainingCheck struct {
+        ID uint `gorm:"primaryKey"`
+    }
+    
+    // Check if trainings table exists and has data
+    hasTrainingsTable := db.Migrator().HasTable("trainings")
+    hasProfileIDColumn := false
+    
+    if hasTrainingsTable {
+        hasProfileIDColumn = db.Migrator().HasColumn(&Training{}, "profile_id")
+    }
+
+    // If table exists but doesn't have profile_id, we need to add it
+    if hasTrainingsTable && !hasProfileIDColumn {
+        // Add column as nullable first using raw SQL
+        if err := db.Exec("ALTER TABLE trainings ADD COLUMN profile_id bigint").Error; err != nil {
+            log.Fatalf("failed to add profile_id column: %v", err)
+        }
+        
+        // Create index
+        if err := db.Exec("CREATE INDEX idx_trainings_profile_id ON trainings(profile_id)").Error; err != nil {
+            // Ignore error if index already exists
+            log.Printf("Index creation note: %v", err)
+        }
+
+        // Update all existing records with default profile
+        if err := db.Exec("UPDATE trainings SET profile_id = ? WHERE profile_id IS NULL", defaultProfile.ID).Error; err != nil {
+            log.Fatalf("failed to update existing trainings: %v", err)
+        }
+
+        // Make column NOT NULL
+        if err := db.Exec("ALTER TABLE trainings ALTER COLUMN profile_id SET NOT NULL").Error; err != nil {
+            log.Fatalf("failed to set profile_id as NOT NULL: %v", err)
+        }
+    }
+
+    // Step 5: Now do full AutoMigrate to ensure everything is up to date
+    if err := db.AutoMigrate(&Training{}); err != nil {
+        log.Fatalf("failed to migrate Training: %v", err)
+    }
 
     router := gin.Default()
 
@@ -122,6 +269,16 @@ func main() {
             exercises.POST("", func(c *gin.Context) { handleCreateExercise(c, db) })
             exercises.DELETE(":id", func(c *gin.Context) { handleDeleteExercise(c, db) })
         }
+
+        profiles := api.Group("/profiles")
+        {
+            profiles.GET("", func(c *gin.Context) { handleListProfiles(c, db) })
+            profiles.POST("", func(c *gin.Context) { handleCreateProfile(c, db) })
+            profiles.DELETE(":id", func(c *gin.Context) { handleDeleteProfile(c, db) })
+        }
+
+        // Калькулятор 1ПМ
+        api.POST("/calculate-1rm", handleCalculate1RM)
     }
 
     port := getEnv("PORT", "8080")
@@ -132,7 +289,14 @@ func main() {
 
 func handleListTrainings(c *gin.Context, db *gorm.DB) {
     var trainings []Training
-    if err := db.Find(&trainings).Error; err != nil {
+    query := db
+
+    // Фильтрация по profileId если указан
+    if profileID := c.Query("profileId"); profileID != "" {
+        query = query.Where("profile_id = ?", profileID)
+    }
+
+    if err := query.Find(&trainings).Error; err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
         return
     }
@@ -274,6 +438,48 @@ func handleDeleteExercise(c *gin.Context, db *gorm.DB) {
     c.Status(http.StatusNoContent)
 }
 
+// handleCalculate1RM - расчет повторного максимума и формирование программы тренировок
+func handleCalculate1RM(c *gin.Context) {
+    var req OneRMRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    // Устанавливаем формулу по умолчанию
+    if req.Formula == "" {
+        req.Formula = "brzycki"
+    }
+
+    // Рассчитываем 1ПМ
+    oneRM := calculate1RM(req.Weight, req.Reps, req.Formula)
+
+    // Рассчитываем целевой вес на основе процента
+    targetWeight := round(oneRM * req.Percentage / 100.0)
+
+    // Определяем количество повторений на основе процента
+    targetReps := calculateTargetReps(req.Percentage)
+
+    // Формируем 6 подходов с одинаковыми значениями
+    sets := make([]SetValues, 6)
+    for i := 0; i < 6; i++ {
+        sets[i] = SetValues{
+            Reps:   targetReps,
+            Weight: targetWeight,
+        }
+    }
+
+    response := OneRMResponse{
+        OneRM:        round(oneRM),
+        TargetWeight: targetWeight,
+        Percentage:   req.Percentage,
+        Formula:      req.Formula,
+        Sets:         sets,
+    }
+
+    c.JSON(http.StatusOK, response)
+}
+
 func seedExercises(db *gorm.DB) {
     var count int64
     db.Model(&Exercise{}).Count(&count)
@@ -330,6 +536,65 @@ func seedExercises(db *gorm.DB) {
     }
 
     log.Println("Exercises seeded successfully")
+}
+
+func seedProfiles(db *gorm.DB) {
+    var count int64
+    db.Model(&Profile{}).Count(&count)
+    if count > 0 {
+        return // Already seeded
+    }
+
+    defaultProfile := Profile{
+        Name: "Основной профиль",
+    }
+    db.Create(&defaultProfile)
+    log.Println("Default profile created")
+}
+
+// Profile handlers
+func handleListProfiles(c *gin.Context, db *gorm.DB) {
+    var profiles []Profile
+    if err := db.Find(&profiles).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    c.JSON(http.StatusOK, profiles)
+}
+
+func handleCreateProfile(c *gin.Context, db *gorm.DB) {
+    var input Profile
+    if err := c.ShouldBindJSON(&input); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+    if err := db.Create(&input).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    c.JSON(http.StatusCreated, input)
+}
+
+func handleDeleteProfile(c *gin.Context, db *gorm.DB) {
+    id := c.Param("id")
+    
+    // Проверяем, не удаляем ли мы последний профиль
+    var count int64
+    db.Model(&Profile{}).Count(&count)
+    if count <= 1 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete the last profile"})
+        return
+    }
+    
+    // Удаляем все тренировки этого профиля
+    db.Where("profile_id = ?", id).Delete(&Training{})
+    
+    // Удаляем сам профиль
+    if err := db.Delete(&Profile{}, id).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    c.Status(http.StatusNoContent)
 }
 
 

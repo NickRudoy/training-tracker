@@ -1,5 +1,6 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Chip } from '@heroui/react'
 
 export type Exercise = {
@@ -16,20 +17,27 @@ type Props = {
   value: string
   onChange: (value: string) => void
   onAddCustomExercise: (exercise: Omit<Exercise, 'id' | 'isCustom'>) => Promise<void>
+  className?: string
 }
 
-export default function ExerciseSelector({ exercises, value, onChange, onAddCustomExercise }: Props) {
+export default function ExerciseSelector({ exercises, value, onChange, onAddCustomExercise, className }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const [filter, setFilter] = useState('')
+  const [localValue, setLocalValue] = useState(value) // Локальное значение для ввода
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null)
   const { isOpen: isAddModalOpen, onOpen: onAddModalOpen, onClose: onAddModalClose } = useDisclosure()
   const [newExercise, setNewExercise] = useState({ name: '', description: '', category: '', muscleGroup: '' })
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const clickedOutsideDropdown = dropdownRef.current && !dropdownRef.current.contains(target)
+      const clickedOutsideInput = inputRef.current && !inputRef.current.contains(target)
+      
+      if (clickedOutsideDropdown && clickedOutsideInput) {
         setIsOpen(false)
       }
     }
@@ -42,13 +50,42 @@ export default function ExerciseSelector({ exercises, value, onChange, onAddCust
   useEffect(() => {
     const exercise = exercises.find(ex => ex.name === value)
     setSelectedExercise(exercise || null)
+    setLocalValue(value) // Синхронизируем локальное значение с пропсом
   }, [value, exercises])
 
-  const filteredExercises = exercises.filter(ex => 
-    ex.name.toLowerCase().includes(filter.toLowerCase()) ||
-    ex.muscleGroup.toLowerCase().includes(filter.toLowerCase()) ||
-    ex.category.toLowerCase().includes(filter.toLowerCase())
-  )
+  // Рассчитываем позицию dropdown при открытии и прокрутке
+  useEffect(() => {
+    const updatePosition = () => {
+      if (isOpen && inputRef.current) {
+        const rect = inputRef.current.getBoundingClientRect()
+        setDropdownPosition({
+          top: rect.bottom + 8,
+          left: rect.left,
+          width: Math.max(rect.width, 600)
+        })
+      }
+    }
+
+    if (isOpen) {
+      updatePosition()
+      window.addEventListener('scroll', updatePosition, true)
+      window.addEventListener('resize', updatePosition)
+    }
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [isOpen])
+
+  const filteredExercises = exercises.filter(ex => {
+    const searchTerm = (filter || '').toLowerCase()
+    return (
+      ex.name.toLowerCase().includes(searchTerm) ||
+      ex.muscleGroup.toLowerCase().includes(searchTerm) ||
+      ex.category.toLowerCase().includes(searchTerm)
+    )
+  })
 
   const groupedExercises = filteredExercises.reduce((acc, ex) => {
     if (!acc[ex.muscleGroup]) {
@@ -59,9 +96,17 @@ export default function ExerciseSelector({ exercises, value, onChange, onAddCust
   }, {} as Record<string, Exercise[]>)
 
   const handleSelect = (exercise: Exercise) => {
+    setLocalValue(exercise.name)
     onChange(exercise.name)
     setIsOpen(false)
-    setFilter('')
+    setFilter(exercise.name)
+  }
+
+  const handleBlur = () => {
+    // При потере фокуса сохраняем значение
+    if (localValue !== value) {
+      onChange(localValue)
+    }
   }
 
   const handleAddCustom = async () => {
@@ -77,15 +122,16 @@ export default function ExerciseSelector({ exercises, value, onChange, onAddCust
         <input
           ref={inputRef}
           type="text"
-          className="w-full h-10 rounded-lg border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 pr-20 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30"
-          value={value}
+          className={className || "w-full h-10 rounded-lg border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 pr-20 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30"}
+          value={localValue}
           onChange={(e) => {
-            onChange(e.target.value)
+            setLocalValue(e.target.value)
             setFilter(e.target.value)
             setIsOpen(true)
           }}
+          onBlur={handleBlur}
           onFocus={() => {
-            setFilter(value)
+            setFilter(localValue)
             setIsOpen(true)
           }}
           placeholder="Начните вводить название упражнения..."
@@ -102,8 +148,16 @@ export default function ExerciseSelector({ exercises, value, onChange, onAddCust
         </button>
       </div>
 
-      {isOpen && filteredExercises.length > 0 && (
-        <div className="absolute z-50 mt-2 w-full max-w-2xl rounded-xl bg-white dark:bg-slate-800 shadow-2xl border-2 border-indigo-200 dark:border-indigo-700 max-h-[400px] overflow-hidden animate-scaleIn">
+      {isOpen && typeof window !== 'undefined' && createPortal(
+        <div 
+          ref={dropdownRef}
+          className="fixed z-[9999] rounded-xl bg-white dark:bg-slate-800 shadow-2xl border-2 border-indigo-200 dark:border-indigo-700 max-h-[400px] overflow-hidden animate-scaleIn"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`
+          }}
+        >
           <div className="sticky top-0 bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-b-2 border-indigo-100 dark:border-indigo-800 px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
               <svg className="w-4 h-4 text-indigo-500 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -114,7 +168,13 @@ export default function ExerciseSelector({ exercises, value, onChange, onAddCust
           </div>
 
           <div className="p-2 overflow-y-auto max-h-[330px]">
-            {Object.entries(groupedExercises).map(([group, exs], idx) => (
+            {filteredExercises.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                <p className="text-sm font-medium">Ничего не найдено</p>
+                <p className="text-xs mt-1">Попробуйте другой запрос или добавьте своё</p>
+              </div>
+            ) : (
+              Object.entries(groupedExercises).map(([group, exs], idx) => (
               <div key={group} className="mb-3 animate-fadeIn" style={{ animationDelay: `${idx * 30}ms` }}>
                 <div className="flex items-center gap-2 px-3 py-1.5 mb-1 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950 dark:to-violet-950 rounded-lg border border-indigo-100 dark:border-indigo-800">
                   <svg className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -150,9 +210,11 @@ export default function ExerciseSelector({ exercises, value, onChange, onAddCust
                   ))}
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {selectedExercise && selectedExercise.description && !isOpen && (
@@ -173,19 +235,33 @@ export default function ExerciseSelector({ exercises, value, onChange, onAddCust
         </div>
       )}
 
-      <Modal isOpen={isAddModalOpen} onClose={onAddModalClose} size="2xl" className="animate-scaleIn">
-        <ModalContent className="dark:bg-slate-900">
-          <ModalHeader className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-700">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Добавить свое упражнение</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Создайте упражнение с описанием техники</p>
-            </div>
-          </ModalHeader>
+      <Modal 
+        isOpen={isAddModalOpen} 
+        onClose={onAddModalClose} 
+        size="2xl"
+        placement="center"
+        backdrop="blur"
+        scrollBehavior="inside"
+        classNames={{
+          backdrop: "bg-slate-900/50 backdrop-blur-sm",
+          wrapper: "z-[9999]",
+          base: "bg-white dark:bg-slate-900",
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-700">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Добавить свое упражнение</h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Создайте упражнение с описанием техники</p>
+                </div>
+              </ModalHeader>
           <ModalBody className="pt-6">
             <div className="space-y-5">
               <div>
@@ -282,6 +358,8 @@ export default function ExerciseSelector({ exercises, value, onChange, onAddCust
               Добавить упражнение
             </Button>
           </ModalFooter>
+            </>
+          )}
         </ModalContent>
       </Modal>
     </div>

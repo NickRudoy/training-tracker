@@ -30,8 +30,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               var prefers= window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
               var dark = (mode === 'dark') || (mode === 'auto' && prefers);
               var root=document.documentElement;
-              if (dark) { root.classList.add('dark'); root.setAttribute('data-theme','dark'); document.body && document.body.classList.add('dark'); }
-              else { root.classList.remove('dark'); root.setAttribute('data-theme','light'); document.body && document.body.classList.remove('dark'); }
+              if (dark) { root.classList.add('dark'); root.setAttribute('data-theme','dark'); }
+              else { root.classList.remove('dark'); root.setAttribute('data-theme','light'); }
               // keep a data attribute with current mode for hydration-safe reads if needed
               root.setAttribute('data-theme-mode', mode);
             } catch(e){}
@@ -40,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <HeroUIProvider>
           <div className="min-h-screen flex flex-col">
             <header className="sticky top-0 z-30 glass-strong">
-              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+              <div className="mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-7 w-7 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm" />
                   <span className="text-sm font-semibold tracking-tight">Трекер тренировок</span>
@@ -50,20 +50,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <ThemeToggle />
                 </div>
                 <nav className="hidden md:flex items-center gap-6 text-sm text-slate-600 dark:text-slate-300">
-                  <span className="hover:text-slate-900 transition-colors cursor-default">Главная</span>
-                  <span className="hover:text-slate-900 transition-colors cursor-default">История</span>
-                  <span className="hover:text-slate-900 transition-colors cursor-default">Настройки</span>
+                  <span className="hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-default">Главная</span>
+                  <span className="hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-default">История</span>
+                  <span className="hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-default">Настройки</span>
                   <ThemeToggle />
                 </nav>
               </div>
             </header>
             <main className="flex-1">
-              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+              <div className="mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 {children}
               </div>
             </main>
             <footer className="border-t border-slate-200/60 bg-white/50 dark:border-slate-700 dark:bg-slate-900/50">
-              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between text-xs text-slate-500">
+              <div className="mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between text-xs text-slate-500">
                 <span className="dark:text-slate-400">© {new Date().getFullYear()} Трекер тренировок</span>
                 <span className="hidden sm:inline dark:text-slate-400">Сделано на Next.js и Go</span>
               </div>
