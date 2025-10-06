@@ -76,3 +76,4 @@ frontend/.cache/
 
 # --- Images / exports (commonly generated) ---
 *.orig
+ANALYTICS_*.md
