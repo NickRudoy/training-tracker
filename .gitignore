@@ -1,0 +1,78 @@
+# --- General ---
+*.log
+logs/
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+.Spotlight-V100
+.Trashes
+
+# Editors/IDE
+.vscode/
+.idea/
+*.iml
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# --- Node / Next.js (frontend) ---
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+frontend/out/
+.vercel/
+frontend/.vercel/
+coverage/
+frontend/coverage/
+*.tsbuildinfo
+build/
+frontend/build/
+
+# Package manager debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Go (backend) ---
+backend/bin/
+backend/build/
+vendor/
+backend/vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.coverprofile
+coverage.txt
+.coverage/
+# Go workspace files (if any)
+go.work
+go.work.sum
+
+# --- Docker / Compose ---
+# Local overrides and artifacts
+Dockerfile.local
+**/Dockerfile.local
+docker-compose.override.yml
+
+# --- Misc caches ---
+.cache/
+frontend/.cache/
+
+# --- Images / exports (commonly generated) ---
+*.orig

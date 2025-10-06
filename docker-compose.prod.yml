@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: training_tracker_db_prod
+    environment:
+      POSTGRES_DB: trainingdb
+      POSTGRES_USER: traininguser
+      POSTGRES_PASSWORD: trainingpass
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U traininguser -d trainingdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: training_tracker_backend_prod
+    environment:
+      - POSTGRES_DSN=host=db user=traininguser password=trainingpass dbname=trainingdb port=5432 sslmode=disable TimeZone=UTC
+      - GIN_MODE=release
+      - PORT=8080
+      - CORS_ORIGIN=http://localhost
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: training_tracker_frontend_prod
+    environment:
+      - NEXT_PUBLIC_API_URL=/api
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  db_data:
+
