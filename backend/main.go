@@ -11,6 +11,15 @@ import (
     "gorm.io/gorm"
 )
 
+type Exercise struct {
+    ID          uint   `json:"id" gorm:"primaryKey"`
+    Name        string `json:"name" gorm:"uniqueIndex;not null"`
+    Description string `json:"description"`
+    Category    string `json:"category"`
+    MuscleGroup string `json:"muscleGroup"`
+    IsCustom    bool   `json:"isCustom" gorm:"default:false"`
+}
+
 type Training struct {
     ID       uint   `json:"id" gorm:"primaryKey"`
     Exercise string `json:"exercise"`
@@ -79,9 +88,12 @@ func main() {
         log.Fatalf("failed to connect database: %v", err)
     }
 
-    if err := db.AutoMigrate(&Training{}); err != nil {
+    if err := db.AutoMigrate(&Training{}, &Exercise{}); err != nil {
         log.Fatalf("failed to migrate: %v", err)
     }
+
+    // Seed exercises if the table is empty
+    seedExercises(db)
 
     router := gin.Default()
 
@@ -102,6 +114,13 @@ func main() {
             trainings.POST("", func(c *gin.Context) { handleCreateTraining(c, db) })
             trainings.PUT(":id", func(c *gin.Context) { handleUpdateTraining(c, db) })
             trainings.DELETE(":id", func(c *gin.Context) { handleDeleteTraining(c, db) })
+        }
+
+        exercises := api.Group("/exercises")
+        {
+            exercises.GET("", func(c *gin.Context) { handleListExercises(c, db) })
+            exercises.POST("", func(c *gin.Context) { handleCreateExercise(c, db) })
+            exercises.DELETE(":id", func(c *gin.Context) { handleDeleteExercise(c, db) })
         }
     }
 
@@ -211,6 +230,106 @@ func handleDeleteTraining(c *gin.Context, db *gorm.DB) {
         return
     }
     c.Status(http.StatusNoContent)
+}
+
+func handleListExercises(c *gin.Context, db *gorm.DB) {
+    var exercises []Exercise
+    if err := db.Order("is_custom ASC, category ASC, name ASC").Find(&exercises).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    c.JSON(http.StatusOK, exercises)
+}
+
+func handleCreateExercise(c *gin.Context, db *gorm.DB) {
+    var input Exercise
+    if err := c.ShouldBindJSON(&input); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+    input.IsCustom = true
+    if err := db.Create(&input).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    c.JSON(http.StatusCreated, input)
+}
+
+func handleDeleteExercise(c *gin.Context, db *gorm.DB) {
+    id := c.Param("id")
+    var exercise Exercise
+    if err := db.First(&exercise, id).Error; err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+        return
+    }
+    // Only allow deletion of custom exercises
+    if !exercise.IsCustom {
+        c.JSON(http.StatusForbidden, gin.H{"error": "cannot delete predefined exercises"})
+        return
+    }
+    if err := db.Delete(&exercise).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    c.Status(http.StatusNoContent)
+}
+
+func seedExercises(db *gorm.DB) {
+    var count int64
+    db.Model(&Exercise{}).Count(&count)
+    if count > 0 {
+        return // Already seeded
+    }
+
+    exercises := []Exercise{
+        // Грудь (Chest)
+        {Name: "Жим штанги лежа", Description: "Лягте на скамью, опустите штангу к груди и выжмите вверх. Держите лопатки сведенными.", Category: "Базовое", MuscleGroup: "Грудь", IsCustom: false},
+        {Name: "Жим гантелей лежа", Description: "Лягте на скамью с гантелями, опустите их к груди и выжмите вверх.", Category: "Базовое", MuscleGroup: "Грудь", IsCustom: false},
+        {Name: "Жим лежа на наклонной скамье", Description: "Жим штанги на скамье под углом 30-45° для акцента на верх груди.", Category: "Базовое", MuscleGroup: "Грудь", IsCustom: false},
+        {Name: "Разводка гантелей лежа", Description: "Разведите гантели в стороны, слегка согнув локти, затем сведите.", Category: "Изолирующее", MuscleGroup: "Грудь", IsCustom: false},
+        {Name: "Отжимания на брусьях", Description: "Опуститесь на брусьях, наклонившись вперед, затем выжмите себя вверх.", Category: "Базовое", MuscleGroup: "Грудь", IsCustom: false},
+
+        // Спина (Back)
+        {Name: "Подтягивания", Description: "Повисните на перекладине, подтянитесь подбородком выше перекладины.", Category: "Базовое", MuscleGroup: "Спина", IsCustom: false},
+        {Name: "Тяга штанги в наклоне", Description: "Наклонитесь вперед, тяните штангу к поясу, держа спину прямой.", Category: "Базовое", MuscleGroup: "Спина", IsCustom: false},
+        {Name: "Становая тяга", Description: "Поднимите штангу с пола, держа спину прямой и используя ноги и спину.", Category: "Базовое", MuscleGroup: "Спина", IsCustom: false},
+        {Name: "Тяга верхнего блока", Description: "Тяните рукоять к груди, сводя лопатки.", Category: "Базовое", MuscleGroup: "Спина", IsCustom: false},
+        {Name: "Тяга гантели в наклоне", Description: "Упритесь рукой в скамью, тяните гантель к поясу.", Category: "Базовое", MuscleGroup: "Спина", IsCustom: false},
+
+        // Ноги (Legs)
+        {Name: "Приседания со штангой", Description: "Опуститесь в присед со штангой на плечах, держа спину прямой.", Category: "Базовое", MuscleGroup: "Ноги", IsCustom: false},
+        {Name: "Жим ногами", Description: "Жмите платформу ногами в тренажере, полностью разгибая ноги.", Category: "Базовое", MuscleGroup: "Ноги", IsCustom: false},
+        {Name: "Выпады с гантелями", Description: "Шагните вперед и опуститесь, пока колено не согнется на 90°.", Category: "Базовое", MuscleGroup: "Ноги", IsCustom: false},
+        {Name: "Сгибания ног лежа", Description: "Согните ноги в тренажере, прижав валик к задней части голени.", Category: "Изолирующее", MuscleGroup: "Ноги", IsCustom: false},
+        {Name: "Разгибания ног сидя", Description: "Разогните ноги в тренажере, поднимая валик.", Category: "Изолирующее", MuscleGroup: "Ноги", IsCustom: false},
+        {Name: "Подъемы на носки стоя", Description: "Встаньте на платформу и поднимитесь на носки.", Category: "Изолирующее", MuscleGroup: "Ноги", IsCustom: false},
+
+        // Плечи (Shoulders)
+        {Name: "Жим штанги стоя", Description: "Выжмите штангу над головой из положения стоя.", Category: "Базовое", MuscleGroup: "Плечи", IsCustom: false},
+        {Name: "Жим гантелей сидя", Description: "Выжмите гантели над головой из положения сидя.", Category: "Базовое", MuscleGroup: "Плечи", IsCustom: false},
+        {Name: "Разводка гантелей в стороны", Description: "Поднимите гантели в стороны до уровня плеч.", Category: "Изолирующее", MuscleGroup: "Плечи", IsCustom: false},
+        {Name: "Разводка в наклоне", Description: "Наклонитесь вперед и разведите гантели в стороны.", Category: "Изолирующее", MuscleGroup: "Плечи", IsCustom: false},
+        {Name: "Тяга штанги к подбородку", Description: "Тяните штангу вдоль тела к подбородку.", Category: "Базовое", MuscleGroup: "Плечи", IsCustom: false},
+
+        // Руки (Arms)
+        {Name: "Подъем штанги на бицепс", Description: "Согните руки со штангой, не двигая локтями.", Category: "Изолирующее", MuscleGroup: "Руки", IsCustom: false},
+        {Name: "Подъем гантелей на бицепс", Description: "Попеременно или одновременно сгибайте руки с гантелями.", Category: "Изолирующее", MuscleGroup: "Руки", IsCustom: false},
+        {Name: "Молотковые сгибания", Description: "Сгибайте руки с гантелями, держа их параллельно.", Category: "Изолирующее", MuscleGroup: "Руки", IsCustom: false},
+        {Name: "Французский жим", Description: "Разгибайте руки со штангой за головой, лежа на скамье.", Category: "Изолирующее", MuscleGroup: "Руки", IsCustom: false},
+        {Name: "Разгибания на блоке", Description: "Разгибайте руки на верхнем блоке, прижав локти к телу.", Category: "Изолирующее", MuscleGroup: "Руки", IsCustom: false},
+
+        // Пресс (Core)
+        {Name: "Планка", Description: "Держите тело прямо в упоре на предплечьях и носках.", Category: "Изолирующее", MuscleGroup: "Пресс", IsCustom: false},
+        {Name: "Скручивания", Description: "Поднимайте верхнюю часть тела к коленям, лежа на спине.", Category: "Изолирующее", MuscleGroup: "Пресс", IsCustom: false},
+        {Name: "Подъем ног в висе", Description: "Повисните на перекладине и поднимайте прямые ноги.", Category: "Изолирующее", MuscleGroup: "Пресс", IsCustom: false},
+        {Name: "Велосипед", Description: "Лежа на спине, поочередно подтягивайте колени к противоположному локтю.", Category: "Изолирующее", MuscleGroup: "Пресс", IsCustom: false},
+    }
+
+    for _, ex := range exercises {
+        db.Create(&ex)
+    }
+
+    log.Println("Exercises seeded successfully")
 }
 
 
