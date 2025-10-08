@@ -399,29 +399,29 @@ export default function TrainingTable({ data, exercises, onChangeCell, onSaveRow
   const table = useReactTable({ data: filteredData, columns, getCoreRowModel: getCoreRowModel() })
 
   return (
-    <div className="rounded-2xl glass shadow-xl animate-fadeIn overflow-hidden flex flex-col">
+    <div className="glass shadow-2xl animate-fadeIn overflow-hidden flex flex-col border border-white/30 dark:border-slate-700/30">
       {/* Header - Fixed */}
-      <div className="flex-shrink-0 flex flex-col gap-4 p-4 border-b-2 border-gradient-to-r from-indigo-100 via-violet-100 to-indigo-100 bg-gradient-to-br from-white/80 to-slate-50/80 dark:from-slate-800/80 dark:to-slate-900/80">
+      <div className="flex-shrink-0 flex flex-col gap-6 p-6 border-b border-white/20 dark:border-slate-700/30 bg-gradient-to-br from-white/90 to-slate-50/90 dark:from-slate-800/90 dark:to-slate-900/90">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           {/* Поиск */}
           <div className="relative flex-shrink-0">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400 dark:text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-400 dark:text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Поиск упражнения..."
-              className="h-10 w-full sm:w-64 pl-10 pr-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 focus:outline-none transition-all"
+              className="h-12 w-full sm:w-72 pl-12 pr-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-800/95 text-base font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-lg hover:border-sky-300 dark:hover:border-sky-600 focus:border-sky-500 dark:focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/30 focus:outline-none transition-all duration-300"
             />
             {filter && (
               <button
                 onClick={() => setFilter("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center transition-colors group"
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center transition-all duration-300 group hover:scale-110"
                 title="Очистить"
               >
-                <svg className="w-3 h-3 text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg className="w-4 h-4 text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             )}
@@ -430,15 +430,15 @@ export default function TrainingTable({ data, exercises, onChangeCell, onSaveRow
           {/* Фильтр недель и счетчик */}
           <div className="flex items-center gap-3 flex-wrap">
             {/* Селектор недели */}
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 border border-purple-100 dark:border-purple-800">
-              <svg className="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950 dark:to-blue-950 border border-sky-200 dark:border-sky-800 shadow-sm">
+              <svg className="w-5 h-5 text-sky-600 dark:text-sky-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
               </svg>
-              <span className="text-xs font-medium text-purple-700 dark:text-purple-300 whitespace-nowrap">Показать:</span>
+              <span className="text-sm font-bold text-sky-700 dark:text-sky-300 whitespace-nowrap">Показать:</span>
               <select
                 value={weekFilter}
                 onChange={(e) => setWeekFilter(Number(e.target.value))}
-                className="text-xs font-bold text-purple-700 dark:text-purple-300 bg-transparent border-0 outline-none cursor-pointer pr-1"
+                className="text-sm font-bold text-sky-700 dark:text-sky-300 bg-transparent border-0 outline-none cursor-pointer pr-1"
               >
                 <option value={0}>Все недели</option>
                 {Array.from({ length: visibleWeeks }, (_, i) => i + 1).map((week) => (
@@ -448,12 +448,12 @@ export default function TrainingTable({ data, exercises, onChangeCell, onSaveRow
             </div>
 
             {/* Счетчик записей */}
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950 dark:to-violet-950 border border-indigo-100 dark:border-indigo-800">
-              <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950 dark:to-green-950 border border-emerald-200 dark:border-emerald-800 shadow-sm">
+              <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">{filteredData.length}</span>
-              <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">записей</span>
+              <span className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{filteredData.length}</span>
+              <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">записей</span>
             </div>
           </div>
         </div>
@@ -545,20 +545,20 @@ export default function TrainingTable({ data, exercises, onChangeCell, onSaveRow
       )}
       
       {/* Footer - Fixed */}
-      <div className="flex-shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 border-t-2 border-gradient-to-r from-indigo-100 via-violet-100 to-indigo-100 bg-gradient-to-br from-slate-50/80 to-white/80 dark:from-slate-800/80 dark:to-slate-900/80 px-4 py-3">
-        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950 border border-amber-200 dark:border-amber-800">
-            <svg className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <div className="flex-shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/20 dark:border-slate-700/30 bg-gradient-to-br from-slate-50/90 to-white/90 dark:from-slate-800/90 dark:to-slate-900/90 px-6 py-4">
+        <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950 border border-amber-200 dark:border-amber-800 shadow-sm">
+            <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="font-medium text-amber-700 dark:text-amber-300">Подсказка:</span>
+            <span className="font-bold text-amber-700 dark:text-amber-300">Подсказка:</span>
           </div>
-          <span className="hidden sm:inline">Ctrl+Enter добавит новую строку • Alt+↑/↓ изменит значение</span>
+          <span className="hidden sm:inline font-medium">Ctrl+Enter добавит новую строку • Alt+↑/↓ изменит значение</span>
         </div>
         {onAddRow && (
           <Button 
             size="sm" 
-            className="h-9 rounded-xl px-5 text-xs font-semibold bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-200/50 dark:shadow-emerald-900/30 hover:shadow-xl hover:shadow-emerald-300/60 dark:hover:shadow-emerald-800/60 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+            className="h-11 rounded-xl px-6 text-sm font-bold bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-xl shadow-emerald-200/50 dark:shadow-emerald-900/30 hover:shadow-2xl hover:shadow-emerald-300/60 dark:hover:shadow-emerald-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300"
             onPress={onAddRow}
           >
             <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

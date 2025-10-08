@@ -63,20 +63,20 @@ export default function ThemeToggle() {
   }, [mode])
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3">
       <label htmlFor="theme-mode" className="sr-only">Тема</label>
       <select
         id="theme-mode"
         value={mode}
         onChange={(e) => updateMode(e.target.value as ThemeMode)}
-        className="h-8 rounded-md border border-slate-300/70 bg-white px-2 text-xs text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+        className="h-9 rounded-lg border border-slate-300/70 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 transition-all duration-300 cursor-pointer"
         aria-label="Режим темы"
       >
         <option value="auto">Авто</option>
         <option value="light">Светлая</option>
         <option value="dark">Тёмная</option>
       </select>
-      <span className="hidden md:inline text-[11px] text-slate-600 dark:text-slate-300">{label}</span>
+      <span className="hidden md:inline text-sm font-medium text-slate-600 dark:text-slate-300">{label}</span>
     </div>
   )
 }

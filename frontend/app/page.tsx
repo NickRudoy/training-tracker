@@ -218,19 +218,19 @@ export default function HomePage() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-6 animate-fadeIn">
-      <div className="rounded-2xl glass shadow-xl p-4 md:p-6 border-2 border-white/60 dark:border-slate-700/60">
+    <div className="space-y-6 md:space-y-8 animate-fadeIn">
+      <div className="glass shadow-2xl p-6 md:p-8 border border-white/30 dark:border-slate-700/30">
         <div className="flex flex-col gap-3 md:gap-4">
           {/* Header */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-200/50 dark:shadow-indigo-900/50 flex-shrink-0">
-              <svg className="w-5 h-5 md:w-6 md:h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow-xl shadow-sky-200/50 dark:shadow-sky-900/50 flex-shrink-0 animate-glow">
+              <svg className="w-6 h-6 md:w-7 md:h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg md:text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 bg-clip-text text-transparent truncate">Планирование Тренировок</h1>
-              <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 mt-0.5 hidden sm:block">Фиксируйте подходы и веса по неделям с полным контролем</p>
+              <h1 className="text-xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 dark:from-sky-400 dark:via-blue-400 dark:to-indigo-400 bg-clip-text text-transparent truncate">Планирование Тренировок</h1>
+              <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1 hidden sm:block font-medium">Фиксируйте подходы и веса по неделям с полным контролем</p>
             </div>
           </div>
           
@@ -248,7 +248,7 @@ export default function HomePage() {
               <Button
                 size="sm"
                 onPress={() => setIsSettingsOpen(true)}
-                className="h-10 md:h-11 min-w-[44px] px-3 md:px-4 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+                className="h-11 md:h-12 min-w-[48px] px-4 md:px-5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                 title="Настройки профиля"
               >
                 <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -257,47 +257,47 @@ export default function HomePage() {
                 </svg>
               </Button>
               {isSaving && (
-                <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 animate-fadeIn">
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950 dark:to-green-950 border border-emerald-200 dark:border-emerald-800 animate-fadeIn shadow-sm">
                   <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="text-xs md:text-sm font-semibold text-emerald-700 dark:text-emerald-300">Сохранение...</span>
+                  <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Сохранение...</span>
                 </div>
               )}
             </div>
 
             {/* Bottom Row: Actions */}
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs md:text-sm font-medium text-slate-600 dark:text-slate-400">Недель:</span>
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Недель:</span>
                 <Button 
                   variant="light" 
                   size="sm"
-                  className="h-8 w-8 md:h-9 md:w-9 min-w-0 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700"
+                  className="h-9 w-9 md:h-10 md:w-10 min-w-0 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200"
                   onPress={() => setVisibleWeeks(Math.max(1, visibleWeeks - 1))}
                   isDisabled={visibleWeeks <= 1}
                 >
                   <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
                   </svg>
                 </Button>
-                <span className="text-base md:text-lg font-bold text-indigo-600 dark:text-indigo-400 min-w-[28px] text-center">{visibleWeeks}</span>
+                <span className="text-lg md:text-xl font-bold text-sky-600 dark:text-sky-400 min-w-[32px] text-center">{visibleWeeks}</span>
                 <Button 
                   variant="light" 
                   size="sm"
-                  className="h-8 w-8 md:h-9 md:w-9 min-w-0 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700"
+                  className="h-9 w-9 md:h-10 md:w-10 min-w-0 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200"
                   onPress={() => setVisibleWeeks(Math.min(8, visibleWeeks + 1))}
                   isDisabled={visibleWeeks >= 8}
                 >
                   <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                   </svg>
                 </Button>
               </div>
               <Button
                 size="sm"
-                className="h-10 md:h-11 flex-1 sm:flex-none rounded-xl px-4 md:px-6 text-sm md:text-base font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200/50 dark:shadow-indigo-900/30 hover:shadow-xl hover:shadow-indigo-300/60 dark:hover:shadow-indigo-800/60 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+                className="h-11 md:h-12 flex-1 sm:flex-none rounded-xl px-5 md:px-7 text-sm md:text-base font-bold bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-xl shadow-sky-200/50 dark:shadow-sky-900/30 hover:shadow-2xl hover:shadow-sky-300/60 dark:hover:shadow-sky-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300"
                 onPress={addRow}
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -308,7 +308,7 @@ export default function HomePage() {
               </Button>
               <Button
                 variant="bordered"
-                className="h-10 md:h-11 rounded-xl px-4 md:px-5 text-sm md:text-base font-semibold border-2 hover:bg-slate-50 dark:hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+                className="h-11 md:h-12 rounded-xl px-5 md:px-6 text-sm md:text-base font-bold border-2 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-sky-300 dark:hover:border-sky-600 hover:-translate-y-1 active:translate-y-0 transition-all duration-300"
                 onPress={() => currentProfile && fetchRows(currentProfile.id)}
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5 mr-2 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -323,22 +323,22 @@ export default function HomePage() {
           </div>
         </div>
         {(loading || error) && (
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-6 flex items-center gap-4">
             {loading && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
-                <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950 dark:to-blue-950 border border-sky-200 dark:border-sky-800 shadow-sm animate-fadeIn">
+                <svg className="w-5 h-5 text-sky-600 dark:text-sky-400 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Загрузка данных...</span>
+                <span className="text-sm font-bold text-sky-700 dark:text-sky-300">Загрузка данных...</span>
               </div>
             )}
             {error && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
-                <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950 dark:to-rose-950 border border-red-200 dark:border-red-800 shadow-sm animate-fadeIn">
+                <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="text-sm font-medium text-red-700 dark:text-red-300">{error}</span>
+                <span className="text-sm font-bold text-red-700 dark:text-red-300">{error}</span>
               </div>
             )}
           </div>

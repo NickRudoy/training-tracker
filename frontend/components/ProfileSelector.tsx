@@ -65,7 +65,7 @@ export default function ProfileSelector({
               const profile = profiles.find(p => p.id === Number(e.target.value))
               if (profile) onSelectProfile(profile)
             }}
-            className="h-10 md:h-11 pl-3 pr-8 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm md:text-base font-semibold text-slate-900 dark:text-slate-100 hover:border-indigo-300 dark:hover:border-indigo-600 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 focus:outline-none transition-all cursor-pointer"
+            className="h-11 md:h-12 pl-4 pr-10 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm md:text-base font-bold text-slate-900 dark:text-slate-100 hover:border-sky-300 dark:hover:border-sky-600 focus:border-sky-500 dark:focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/30 focus:outline-none transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
           >
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
@@ -79,7 +79,7 @@ export default function ProfileSelector({
         <Button
           size="sm"
           onPress={onOpen}
-          className="h-10 md:h-11 min-w-[44px] px-3 md:px-4 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+          className="h-11 md:h-12 min-w-[48px] px-4 md:px-5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
           title="Добавить профиль"
         >
           <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -93,7 +93,7 @@ export default function ProfileSelector({
             size="sm"
             variant="bordered"
             onPress={() => currentProfile && handleDelete(currentProfile.id)}
-            className="h-10 md:h-11 min-w-[44px] px-3 md:px-4 rounded-lg border-2 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 hover:border-red-300 dark:hover:border-red-700 transition-all"
+            className="h-11 md:h-12 min-w-[48px] px-4 md:px-5 rounded-xl border-2 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 hover:border-red-300 dark:hover:border-red-700 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
             title="Удалить профиль"
           >
             <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -118,21 +118,21 @@ export default function ProfileSelector({
         <ModalContent>
           {(onClose) => (
             <>
-              <ModalHeader className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-700">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              <ModalHeader className="flex items-center gap-4 pb-6 border-b border-slate-200 dark:border-slate-700">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-200/50 dark:shadow-emerald-900/50">
+                  <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Новый профиль</h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Создайте отдельный план тренировок</p>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Новый профиль</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 font-medium">Создайте отдельный план тренировок</p>
                 </div>
               </ModalHeader>
 
               <ModalBody className="pt-6">
                 <div>
-                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                  <label className="text-base font-bold text-slate-700 dark:text-slate-300 mb-3 block">
                     Название профиля
                   </label>
                   <input
@@ -141,17 +141,17 @@ export default function ProfileSelector({
                     onChange={(e) => setNewProfileName(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                     placeholder="Например: Массонабор, Сушка, Сила..."
-                    className="w-full h-11 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-sm font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-all"
+                    className="w-full h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-base font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:focus:ring-sky-900/30 transition-all duration-300 shadow-sm hover:shadow-md"
                     autoFocus
                   />
                 </div>
               </ModalBody>
 
-              <ModalFooter className="border-t border-slate-200 dark:border-slate-700">
+              <ModalFooter className="pt-6 border-t border-slate-200 dark:border-slate-700">
                 <Button
                   variant="light"
                   onPress={onClose}
-                  className="font-semibold"
+                  className="h-11 px-6 font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300"
                 >
                   Отмена
                 </Button>
@@ -159,7 +159,7 @@ export default function ProfileSelector({
                   onPress={handleCreate}
                   isDisabled={!newProfileName.trim() || isCreating}
                   isLoading={isCreating}
-                  className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold shadow-lg hover:shadow-xl transition-all"
+                  className="h-11 px-8 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
                 >
                   Создать
                 </Button>

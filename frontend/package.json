@@ -15,7 +15,8 @@
     "framer-motion": "^11.0.0",
     "next": "latest",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.14",
