@@ -249,6 +249,78 @@ type TrainingSessionWithExercises struct {
 	Exercises []TrainingSessionExercise `json:"exercises"`
 }
 
+// TrainingProgram - программа тренировок
+type TrainingProgram struct {
+	ID          uint      `json:"id" gorm:"primaryKey"`
+	ProfileID   uint      `json:"profileId" gorm:"not null;index"`
+	Name        string    `json:"name" gorm:"not null"`
+	Description string    `json:"description"`
+	StartDate   time.Time `json:"startDate"`
+	EndDate     time.Time `json:"endDate"`
+	IsActive    bool      `json:"isActive" gorm:"default:false"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// ProgramExercise - упражнение в программе
+type ProgramExercise struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	ProgramID uint      `json:"programId" gorm:"not null;index"`
+	Exercise  string    `json:"exercise" gorm:"not null"`
+	DayOfWeek int       `json:"dayOfWeek" gorm:"not null"` // 1-7 (понедельник-воскресенье)
+	Order     int       `json:"order" gorm:"column:exercise_order;not null"`     // порядок в дне
+	Sets      int       `json:"sets" gorm:"not null"`
+	Reps      int       `json:"reps" gorm:"not null"`
+	Weight    float64   `json:"weight" gorm:"not null"`
+	Notes     string    `json:"notes"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ProgramSession - сессия программы тренировок
+type ProgramSession struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	ProgramID uint      `json:"programId" gorm:"not null;index"`
+	Date      time.Time `json:"date" gorm:"not null"`
+	Completed bool      `json:"completed" gorm:"default:false"`
+	Notes     string    `json:"notes"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ProgramSessionWithExercises - сессия с упражнениями
+type ProgramSessionWithExercises struct {
+	ProgramSession
+	Exercises []ProgramExercise `json:"exercises"`
+}
+
+// TrainingProgramRequest - запрос на создание/обновление программы
+type TrainingProgramRequest struct {
+	Name        string `json:"name" binding:"required"`
+	Description string `json:"description"`
+	StartDate   string `json:"startDate"` // ISO date string
+	EndDate     string `json:"endDate"`   // ISO date string
+	IsActive    bool   `json:"isActive"`
+}
+
+// ProgramExerciseRequest - запрос на создание/обновление упражнения программы
+type ProgramExerciseRequest struct {
+	Exercise  string  `json:"exercise" binding:"required"`
+	DayOfWeek int     `json:"dayOfWeek" binding:"required,min=1,max=7"`
+	Order     int     `json:"order" binding:"required,min=1"`
+	Sets      int     `json:"sets" binding:"required,min=1"`
+	Reps      int     `json:"reps" binding:"required,min=1"`
+	Weight    float64 `json:"weight" binding:"min=0"`
+	Notes     string  `json:"notes"`
+}
+
+// ProgramSessionRequest - запрос на создание/обновление сессии программы
+type ProgramSessionRequest struct {
+	Date      string `json:"date"` // ISO date string
+	Completed bool   `json:"completed"`
+	Notes     string `json:"notes"`
+}
+
 type Training struct {
 	ID          uint   `json:"id" gorm:"primaryKey"`
 	ProfileID   uint   `json:"profileId" gorm:"not null;index"`
@@ -389,8 +461,8 @@ func main() {
 	}
 
 	// Step 1.5: Migrate new tables
-	if err := db.AutoMigrate(&BodyWeight{}, &PersonalRecord{}, &Goal{}, &TrainingSession{}, &TrainingSessionExercise{}); err != nil {
-		log.Fatalf("failed to migrate BodyWeight, PersonalRecord, Goal, TrainingSession and TrainingSessionExercise: %v", err)
+	if err := db.AutoMigrate(&BodyWeight{}, &PersonalRecord{}, &Goal{}, &TrainingSession{}, &TrainingSessionExercise{}, &TrainingProgram{}, &ProgramExercise{}, &ProgramSession{}); err != nil {
+		log.Fatalf("failed to migrate BodyWeight, PersonalRecord, Goal, TrainingSession, TrainingSessionExercise, TrainingProgram, ProgramExercise and ProgramSession: %v", err)
 	}
 
 	// Step 2: Seed default profile and exercises
@@ -509,6 +581,20 @@ func main() {
 			profiles.POST(":id/training-sessions/:sessionId/exercises", func(c *gin.Context) { handleAddExerciseToSession(c, db) })
 			profiles.PUT(":id/training-sessions/:sessionId/exercises/:exerciseId", func(c *gin.Context) { handleUpdateSessionExercise(c, db) })
 			profiles.DELETE(":id/training-sessions/:sessionId/exercises/:exerciseId", func(c *gin.Context) { handleDeleteSessionExercise(c, db) })
+
+			// Training Programs
+			profiles.GET(":id/programs", func(c *gin.Context) { handleGetPrograms(c, db) })
+			profiles.POST(":id/programs", func(c *gin.Context) { handleCreateProgram(c, db) })
+			profiles.PUT(":id/programs/:programId", func(c *gin.Context) { handleUpdateProgram(c, db) })
+			profiles.DELETE(":id/programs/:programId", func(c *gin.Context) { handleDeleteProgram(c, db) })
+			profiles.GET(":id/programs/:programId/exercises", func(c *gin.Context) { handleGetProgramExercises(c, db) })
+			profiles.POST(":id/programs/:programId/exercises", func(c *gin.Context) { handleCreateProgramExercise(c, db) })
+			profiles.PUT(":id/programs/:programId/exercises/:exerciseId", func(c *gin.Context) { handleUpdateProgramExercise(c, db) })
+			profiles.DELETE(":id/programs/:programId/exercises/:exerciseId", func(c *gin.Context) { handleDeleteProgramExercise(c, db) })
+			profiles.GET(":id/programs/:programId/sessions", func(c *gin.Context) { handleGetProgramSessions(c, db) })
+			profiles.POST(":id/programs/:programId/sessions", func(c *gin.Context) { handleCreateProgramSession(c, db) })
+			profiles.PUT(":id/programs/:programId/sessions/:sessionId", func(c *gin.Context) { handleUpdateProgramSession(c, db) })
+			profiles.DELETE(":id/programs/:programId/sessions/:sessionId", func(c *gin.Context) { handleDeleteProgramSession(c, db) })
 		}
 
 		// Калькулятор 1ПМ
@@ -2174,4 +2260,396 @@ func parseUint(s string) uint {
 		return uint(val)
 	}
 	return 0
+}
+
+// ========== TRAINING PROGRAM HANDLERS ==========
+
+// handleGetPrograms - получение программ профиля
+func handleGetPrograms(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+
+	var programs []TrainingProgram
+	if err := db.Where("profile_id = ?", profileID).Order("created_at DESC").Find(&programs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, programs)
+}
+
+// handleCreateProgram - создание новой программы
+func handleCreateProgram(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+
+	var req TrainingProgramRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Парсим даты
+	startDate, err := time.Parse("2006-01-02", req.StartDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start date format. Use YYYY-MM-DD"})
+		return
+	}
+
+	endDate, err := time.Parse("2006-01-02", req.EndDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end date format. Use YYYY-MM-DD"})
+		return
+	}
+
+	// Если создается активная программа, деактивируем остальные
+	if req.IsActive {
+		db.Model(&TrainingProgram{}).Where("profile_id = ?", profileID).Update("is_active", false)
+	}
+
+	program := TrainingProgram{
+		ProfileID:   uint(parseUint(profileID)),
+		Name:        req.Name,
+		Description: req.Description,
+		StartDate:   startDate,
+		EndDate:     endDate,
+		IsActive:    req.IsActive,
+	}
+
+	if err := db.Create(&program).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, program)
+}
+
+// handleUpdateProgram - обновление программы
+func handleUpdateProgram(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	var req TrainingProgramRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Парсим даты если указаны
+	if req.StartDate != "" {
+		if date, err := time.Parse("2006-01-02", req.StartDate); err == nil {
+			program.StartDate = date
+		}
+	}
+	if req.EndDate != "" {
+		if date, err := time.Parse("2006-01-02", req.EndDate); err == nil {
+			program.EndDate = date
+		}
+	}
+
+	// Если программа становится активной, деактивируем остальные
+	if req.IsActive && !program.IsActive {
+		db.Model(&TrainingProgram{}).Where("profile_id = ? AND id != ?", profileID, programID).Update("is_active", false)
+	}
+
+	program.Name = req.Name
+	program.Description = req.Description
+	program.IsActive = req.IsActive
+	program.UpdatedAt = time.Now()
+
+	if err := db.Save(&program).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, program)
+}
+
+// handleDeleteProgram - удаление программы
+func handleDeleteProgram(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+
+	// Удаляем сначала упражнения и сессии
+	db.Where("program_id = ?", programID).Delete(&ProgramExercise{})
+	db.Where("program_id = ?", programID).Delete(&ProgramSession{})
+
+	// Удаляем программу
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).Delete(&TrainingProgram{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// handleGetProgramExercises - получение упражнений программы
+func handleGetProgramExercises(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+
+	// Проверяем, что программа принадлежит профилю
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	var exercises []ProgramExercise
+	if err := db.Where("program_id = ?", programID).Order("day_of_week ASC, exercise_order ASC").Find(&exercises).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, exercises)
+}
+
+// handleCreateProgramExercise - создание упражнения программы
+func handleCreateProgramExercise(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+
+	// Проверяем, что программа принадлежит профилю
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	var req ProgramExerciseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	exercise := ProgramExercise{
+		ProgramID: uint(parseUint(programID)),
+		Exercise:  req.Exercise,
+		DayOfWeek: req.DayOfWeek,
+		Order:     req.Order,
+		Sets:      req.Sets,
+		Reps:      req.Reps,
+		Weight:    req.Weight,
+		Notes:     req.Notes,
+	}
+
+	if err := db.Create(&exercise).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, exercise)
+}
+
+// handleUpdateProgramExercise - обновление упражнения программы
+func handleUpdateProgramExercise(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+	exerciseID := c.Param("exerciseId")
+
+	// Проверяем, что программа принадлежит профилю
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	var exercise ProgramExercise
+	if err := db.Where("id = ? AND program_id = ?", exerciseID, programID).First(&exercise).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Exercise not found"})
+		return
+	}
+
+	var req ProgramExerciseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	exercise.Exercise = req.Exercise
+	exercise.DayOfWeek = req.DayOfWeek
+	exercise.Order = req.Order
+	exercise.Sets = req.Sets
+	exercise.Reps = req.Reps
+	exercise.Weight = req.Weight
+	exercise.Notes = req.Notes
+	exercise.UpdatedAt = time.Now()
+
+	if err := db.Save(&exercise).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, exercise)
+}
+
+// handleDeleteProgramExercise - удаление упражнения программы
+func handleDeleteProgramExercise(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+	exerciseID := c.Param("exerciseId")
+
+	// Проверяем, что программа принадлежит профилю
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	if err := db.Where("id = ? AND program_id = ?", exerciseID, programID).Delete(&ProgramExercise{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// handleGetProgramSessions - получение сессий программы
+func handleGetProgramSessions(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+	year := c.Query("year")
+	month := c.Query("month")
+
+	// Проверяем, что программа принадлежит профилю
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	query := db.Where("program_id = ?", programID)
+
+	// Фильтрация по году и месяцу
+	if year != "" && month != "" {
+		startDate := fmt.Sprintf("%s-%s-01", year, month)
+		endDate := fmt.Sprintf("%s-%s-31", year, month)
+		query = query.Where("date >= ? AND date <= ?", startDate, endDate)
+	}
+
+	var sessions []ProgramSession
+	if err := query.Order("date ASC").Find(&sessions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, sessions)
+}
+
+// handleCreateProgramSession - создание сессии программы
+func handleCreateProgramSession(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+
+	// Проверяем, что программа принадлежит профилю
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	var req ProgramSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Парсим дату
+	var date time.Time
+	var err error
+	if req.Date != "" {
+		date, err = time.Parse("2006-01-02", req.Date)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+			return
+		}
+	} else {
+		date = time.Now()
+	}
+
+	session := ProgramSession{
+		ProgramID: uint(parseUint(programID)),
+		Date:      date,
+		Completed: req.Completed,
+		Notes:     req.Notes,
+	}
+
+	if err := db.Create(&session).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, session)
+}
+
+// handleUpdateProgramSession - обновление сессии программы
+func handleUpdateProgramSession(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+	sessionID := c.Param("sessionId")
+
+	// Проверяем, что программа принадлежит профилю
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	var session ProgramSession
+	if err := db.Where("id = ? AND program_id = ?", sessionID, programID).First(&session).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
+		return
+	}
+
+	var req ProgramSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Парсим дату если указана
+	if req.Date != "" {
+		date, err := time.Parse("2006-01-02", req.Date)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+			return
+		}
+		session.Date = date
+	}
+
+	session.Completed = req.Completed
+	session.Notes = req.Notes
+	session.UpdatedAt = time.Now()
+
+	if err := db.Save(&session).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, session)
+}
+
+// handleDeleteProgramSession - удаление сессии программы
+func handleDeleteProgramSession(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+	sessionID := c.Param("sessionId")
+
+	// Проверяем, что программа принадлежит профилю
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	if err := db.Where("id = ? AND program_id = ?", sessionID, programID).Delete(&ProgramSession{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }

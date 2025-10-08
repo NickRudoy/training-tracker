@@ -54,6 +54,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     Главная
                     <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-sky-500 to-blue-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></span>
                   </a>
+                  <a href="/program" className="relative group hover:text-sky-600 dark:hover:text-sky-400 transition-all duration-300 cursor-pointer font-semibold px-3 py-2 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/20">
+                    Программа
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-sky-500 to-blue-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></span>
+                  </a>
                   <a href="/analytics" className="relative group hover:text-sky-600 dark:hover:text-sky-400 transition-all duration-300 cursor-pointer font-semibold px-3 py-2 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/20">
                     Аналитика
                     <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-sky-500 to-blue-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></span>

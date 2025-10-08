@@ -126,10 +126,31 @@ export default function TrainingHistory({ profileId }: Props) {
 
   const loadTrainingProgram = async () => {
     try {
-      const response = await api.get(`/api/trainings?profileId=${profileId}`)
-      setTrainingProgram(response.data)
+      // Загружаем программы тренировок
+      const programsResponse = await api.get(`/api/profiles/${profileId}/programs`)
+      const programs = programsResponse.data
+      
+      // Находим активную программу
+      const activeProgram = programs.find((p: any) => p.isActive)
+      
+      if (activeProgram) {
+        // Загружаем упражнения активной программы
+        const exercisesResponse = await api.get(`/api/profiles/${profileId}/programs/${activeProgram.id}/exercises`)
+        setTrainingProgram(exercisesResponse.data)
+      } else {
+        // Если нет активной программы, загружаем из старой таблицы
+        const response = await api.get(`/api/trainings?profileId=${profileId}`)
+        setTrainingProgram(response.data)
+      }
     } catch (err) {
       console.error('Failed to load training program:', err)
+      // Fallback к старой таблице
+      try {
+        const response = await api.get(`/api/trainings?profileId=${profileId}`)
+        setTrainingProgram(response.data)
+      } catch (fallbackErr) {
+        console.error('Failed to load fallback training program:', fallbackErr)
+      }
     }
   }
 
@@ -141,20 +162,37 @@ export default function TrainingHistory({ profileId }: Props) {
 
       // Создаем упражнения для выбранных упражнений
       for (const exerciseName of selectedExercises) {
-        // Находим упражнение в программе для получения последнего веса
-        const programExercise = trainingProgram.find(ex => ex.exercise === exerciseName)
-        const lastWeight = programExercise ? 
-          (programExercise.week4d6Kg || programExercise.week3d6Kg || programExercise.week2d6Kg || programExercise.week1d6Kg || 0) : 0
+        // Находим упражнение в программе для получения параметров
+        const programExercise = trainingProgram.find((ex: any) => ex.exercise === exerciseName)
+        
+        let sets = [{ weight: 0, reps: 8, rpe: 7 }]
+        let notes = ''
+        
+        if (programExercise) {
+          // Если это упражнение из программы, используем его параметры
+          if (programExercise.sets && programExercise.reps && programExercise.weight) {
+            sets = [{
+              weight: programExercise.weight,
+              reps: programExercise.reps,
+              rpe: 7
+            }]
+            notes = programExercise.notes || ''
+          } else if (programExercise.week4d6Kg || programExercise.week3d6Kg || programExercise.week2d6Kg || programExercise.week1d6Kg) {
+            // Fallback для старой структуры данных
+            const lastWeight = programExercise.week4d6Kg || programExercise.week3d6Kg || programExercise.week2d6Kg || programExercise.week1d6Kg || 0
+            sets = [{
+              weight: lastWeight,
+              reps: 8,
+              rpe: 7
+            }]
+          }
+        }
 
-        // Создаем упражнение с одним подходом по умолчанию
+        // Создаем упражнение
         const exerciseData = {
           exercise: exerciseName,
-          sets: [{
-            weight: lastWeight,
-            reps: 8,
-            rpe: 7
-          }],
-          notes: ''
+          sets: sets,
+          notes: notes
         }
 
         await api.post(`/api/profiles/${profileId}/training-sessions/${sessionId}/exercises`, exerciseData)
@@ -540,7 +578,10 @@ export default function TrainingHistory({ profileId }: Props) {
                         <label htmlFor={`exercise-${index}`} className="flex-1 cursor-pointer">
                           <div className="font-medium">{exercise.exercise}</div>
                           <div className="text-sm text-gray-500">
-                            Последний вес: {exercise.week4d6Kg || exercise.week3d6Kg || exercise.week2d6Kg || exercise.week1d6Kg || 0} кг
+                            {exercise.sets && exercise.reps && exercise.weight ? 
+                              `${exercise.sets} × ${exercise.reps} × ${exercise.weight}кг` :
+                              `Последний вес: ${exercise.week4d6Kg || exercise.week3d6Kg || exercise.week2d6Kg || exercise.week1d6Kg || 0} кг`
+                            }
                           </div>
                         </label>
                       </div>
