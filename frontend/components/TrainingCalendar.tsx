@@ -1,6 +1,8 @@
 "use client"
 import React, { useState, useEffect } from 'react'
-import { Button, Card, CardBody, CardHeader, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Input, Select, SelectItem, Chip, Spinner } from '@heroui/react'
+import { Button, Card, CardBody, CardHeader, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Input, Select, SelectItem, Chip, Spinner } from '@heroui/react'
+import UiModal from './UiModal'
+import TrainingSession from './TrainingSession'
 import axios from 'axios'
 
 const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080' })
@@ -42,6 +44,11 @@ type ProgramSession = {
   updatedAt: string
 }
 
+type PlanDay = {
+  date: string
+  exercises: ProgramExercise[]
+}
+
 interface Props {
   profileId: number
   programs: TrainingProgram[]
@@ -52,16 +59,26 @@ interface Props {
 
 export default function TrainingCalendar({ profileId, programs, currentProgram, exercises, onProgramChange }: Props) {
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [programExercises, setProgramExercises] = useState<ProgramExercise[]>([])
   const [sessions, setSessions] = useState<ProgramSession[]>([])
+  const [planDays, setPlanDays] = useState<PlanDay[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [selectedSession, setSelectedSession] = useState<ProgramSession | null>(null)
   const { isOpen, onOpen, onClose } = useDisclosure()
+
+  const toLocalYMD = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
 
   // Загрузка сессий для текущего месяца
   useEffect(() => {
     if (currentProgram) {
+      loadProgramExercises()
+      loadPlanDays()
       loadSessions()
     }
   }, [currentProgram, currentDate])
@@ -69,20 +86,40 @@ export default function TrainingCalendar({ profileId, programs, currentProgram, 
   const loadSessions = async () => {
     if (!currentProgram) return
 
-    setLoading(true)
-    setError(null)
     try {
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth() + 1
       const response = await api.get(`/api/profiles/${profileId}/programs/${currentProgram.id}/sessions`, {
         params: { year, month }
       })
-      setSessions(response.data)
+      setSessions(response.data || [])
     } catch (err: any) {
       console.error('Failed to load sessions:', err)
-      setError(err?.response?.data?.error || 'Ошибка загрузки сессий')
-    } finally {
-      setLoading(false)
+    }
+  }
+
+  const loadProgramExercises = async () => {
+    if (!currentProgram) return
+
+    try {
+      const response = await api.get(`/api/profiles/${profileId}/programs/${currentProgram.id}/exercises`)
+      setProgramExercises(response.data)
+    } catch (err: any) {
+      console.error('Failed to load program exercises:', err)
+    }
+  }
+
+  const loadPlanDays = async () => {
+    if (!currentProgram) return
+    try {
+      const year = currentDate.getFullYear()
+      const month = currentDate.getMonth() + 1
+      const response = await api.get(`/api/profiles/${profileId}/programs/${currentProgram.id}/plan-days`, {
+        params: { year, month }
+      })
+      setPlanDays(response.data || [])
+    } catch (err: any) {
+      console.error('Failed to load plan days:', err)
     }
   }
 
@@ -92,7 +129,8 @@ export default function TrainingCalendar({ profileId, programs, currentProgram, 
     const firstDay = new Date(year, month, 1)
     const lastDay = new Date(year, month + 1, 0)
     const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+    // JS getDay(): 0=Sun..6=Sat. We need Monday-first index 0..6
+    const startingDayOfWeek = (firstDay.getDay() + 6) % 7
     
     const days = []
     
@@ -109,44 +147,68 @@ export default function TrainingCalendar({ profileId, programs, currentProgram, 
     return days
   }
 
-  const getSessionForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0]
-    return sessions.find(session => session.date === dateStr)
+  const getSessionsForDate = (date: Date) => {
+    const dateStr = toLocalYMD(date)
+    return sessions.filter(session => {
+      const sessionDateStr = toLocalYMD(new Date(session.date))
+      return sessionDateStr === dateStr
+    })
+  }
+
+  const getLatestSessionForDate = (date: Date) => {
+    const daySessions = getSessionsForDate(date)
+    if (daySessions.length === 0) return undefined
+    return daySessions.sort((a, b) => {
+      const au = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+      const bu = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+      if (bu !== au) return bu - au
+      const aid = a.id || 0
+      const bid = b.id || 0
+      return bid - aid
+    })[0]
+  }
+
+  const hasPlanForDate = (date: Date) => {
+    const ymd = toLocalYMD(date)
+    return planDays.some(d => d.date === ymd)
+  }
+
+  const getPlannedExercisesForDate = (date: Date) => {
+    // getDay(): 0 (Sun) .. 6 (Sat); our dayOfWeek: 1 (Mon) .. 7 (Sun)
+    const weekday = ((date.getDay() + 6) % 7) + 1
+    if (!currentProgram) return [] as ProgramExercise[]
+    // Ограничиваем план периодом программы
+    const start = currentProgram.startDate ? new Date(currentProgram.startDate) : null
+    const end = currentProgram.endDate ? new Date(currentProgram.endDate) : null
+    const dateOnly = new Date(date)
+    dateOnly.setHours(0,0,0,0)
+    if (start) start.setHours(0,0,0,0)
+    if (end) end.setHours(0,0,0,0)
+    const outside = (start && dateOnly < start) || (end && dateOnly > end)
+    if (outside) return [] as ProgramExercise[]
+
+    return programExercises
+      .filter(ex => ex.dayOfWeek === weekday)
+      .sort((a, b) => a.order - b.order)
+  }
+
+  const isOutsideProgramPeriod = (date: Date) => {
+    // Если программа не выбрана — считаем, что за пределами периода (ничего не показываем)
+    if (!currentProgram) return true
+    const start = currentProgram.startDate ? new Date(currentProgram.startDate) : null
+    const end = currentProgram.endDate ? new Date(currentProgram.endDate) : null
+    const day = new Date(date)
+    day.setHours(0,0,0,0)
+    if (start) start.setHours(0,0,0,0)
+    if (end) end.setHours(0,0,0,0)
+    return (start && day < start) || (end && day > end)
   }
 
   const handleDateClick = (date: Date) => {
     setSelectedDate(date)
-    const session = getSessionForDate(date)
-    setSelectedSession(session || null)
     onOpen()
   }
 
-  const handleCompleteSession = async (sessionId: number) => {
-    try {
-      await api.put(`/api/profiles/${profileId}/programs/${currentProgram?.id}/sessions/${sessionId}`, {
-        completed: true
-      })
-      await loadSessions()
-    } catch (err: any) {
-      console.error('Failed to complete session:', err)
-      setError(err?.response?.data?.error || 'Ошибка завершения тренировки')
-    }
-  }
-
-  const handleCreateSession = async () => {
-    if (!currentProgram || !selectedDate) return
-
-    try {
-      const response = await api.post(`/api/profiles/${profileId}/programs/${currentProgram.id}/sessions`, {
-        date: selectedDate.toISOString().split('T')[0],
-        exercises: []
-      })
-      setSessions(prev => [...prev, response.data])
-    } catch (err: any) {
-      console.error('Failed to create session:', err)
-      setError(err?.response?.data?.error || 'Ошибка создания тренировки')
-    }
-  }
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
@@ -233,7 +295,7 @@ export default function TrainingCalendar({ profileId, programs, currentProgram, 
                 className="max-w-xs"
               >
                 {programs.map((program) => (
-                  <SelectItem key={program.id?.toString() || ''} value={program.id?.toString() || ''}>
+                  <SelectItem key={program.id?.toString() || ''}>
                     {program.name}
                   </SelectItem>
                 ))}
@@ -248,6 +310,33 @@ export default function TrainingCalendar({ profileId, programs, currentProgram, 
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
+      )}
+
+      {/* Program Period Info */}
+      {currentProgram && (currentProgram.startDate || currentProgram.endDate) && (
+        <Card className="bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
+          <CardBody className="py-3">
+            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium">Период программы:</span>
+              <span>
+                {currentProgram.startDate && currentProgram.endDate ? (
+                  <>
+                    {new Date(currentProgram.startDate).toLocaleDateString('ru-RU')} — {new Date(currentProgram.endDate).toLocaleDateString('ru-RU')}
+                  </>
+                ) : currentProgram.startDate ? (
+                  <>с {new Date(currentProgram.startDate).toLocaleDateString('ru-RU')}</>
+                ) : currentProgram.endDate ? (
+                  <>до {new Date(currentProgram.endDate).toLocaleDateString('ru-RU')}</>
+                ) : null}
+              </span>
+              <span className="text-slate-500 dark:text-slate-500">•</span>
+              <span>Дни вне периода недоступны для планирования</span>
+            </div>
+          </CardBody>
+        </Card>
       )}
 
       {/* Calendar */}
@@ -269,34 +358,39 @@ export default function TrainingCalendar({ profileId, programs, currentProgram, 
                 return <div key={index} className="bg-white dark:bg-slate-900 h-24" />
               }
               
-              const session = getSessionForDate(day)
+              const latestSession = getLatestSessionForDate(day)
               const isToday = day.toDateString() === new Date().toDateString()
-              const isPast = day < new Date().setHours(0, 0, 0, 0)
+              const isPast = day.getTime() < new Date(new Date().setHours(0, 0, 0, 0)).getTime()
+              const outside = isOutsideProgramPeriod(day)
+              const planned = hasPlanForDate(day)
               
               return (
                 <div
                   key={day.toISOString()}
-                  className={`bg-white dark:bg-slate-900 h-24 p-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
-                    isToday ? 'ring-2 ring-blue-500' : ''
+                  className={`relative bg-white dark:bg-slate-900 h-24 p-2 ${outside ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800'} transition-colors ${
+                    isToday ? 'ring-1 ring-slate-300 dark:ring-slate-600' : ''
                   }`}
-                  onClick={() => handleDateClick(day)}
+                  onClick={() => {
+                    if (!outside) handleDateClick(day)
+                  }}
                 >
                   <div className="flex flex-col h-full">
+                    {/* Plan bar (top): green if backend shows completed session for this day, else orange */}
+                    {!outside && planned && (
+                      <div className="mb-1">
+                        <div className={`h-1 w-full rounded-full ${latestSession?.completed ? 'bg-green-500' : 'bg-orange-300'}`} />
+                      </div>
+                    )}
                     <span className={`text-sm font-medium ${
                       isToday ? 'text-blue-600 dark:text-blue-400' : 
+                      outside ? 'text-slate-300 dark:text-slate-600' : 
                       isPast ? 'text-slate-400 dark:text-slate-500' : 
                       'text-slate-900 dark:text-slate-100'
                     }`}>
                       {day.getDate()}
                     </span>
                     
-                    {session && (
-                      <div className="flex-1 flex items-center justify-center">
-                        <div className={`w-2 h-2 rounded-full ${
-                          session.completed ? 'bg-green-500' : 'bg-orange-500'
-                        }`} />
-                      </div>
-                    )}
+                    {/* Bottom fact bar removed per request */}
                   </div>
                 </div>
               )
@@ -321,105 +415,15 @@ export default function TrainingCalendar({ profileId, programs, currentProgram, 
         </div>
       </div>
 
-      {/* Session Details Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="4xl">
-        <ModalContent>
-          <ModalHeader>
-            {selectedDate && (
-              <div>
-                <h3 className="text-xl font-bold">
-                  Тренировка на {selectedDate.toLocaleDateString('ru-RU', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </h3>
-                {currentProgram && (
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Программа: {currentProgram.name}
-                  </p>
-                )}
-              </div>
-            )}
-          </ModalHeader>
-          <ModalBody>
-            {selectedSession ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <Chip color={selectedSession.completed ? 'success' : 'warning'}>
-                    {selectedSession.completed ? 'Выполнено' : 'Запланировано'}
-                  </Chip>
-                  {!selectedSession.completed && (
-                    <Button
-                      color="success"
-                      size="sm"
-                      onPress={() => handleCompleteSession(selectedSession.id!)}
-                    >
-                      Отметить как выполненное
-                    </Button>
-                  )}
-                </div>
-                
-                {selectedSession.exercises.length > 0 ? (
-                  <div className="space-y-3">
-                    <h4 className="font-semibold">Упражнения:</h4>
-                    {selectedSession.exercises.map((exercise, index) => (
-                      <div key={index} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h5 className="font-medium">{exercise.exercise}</h5>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
-                              {exercise.sets} × {exercise.reps} × {exercise.weight}кг
-                            </p>
-                            {exercise.notes && (
-                              <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
-                                {exercise.notes}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-slate-500 dark:text-slate-400">
-                      Нет упражнений в этой тренировке
-                    </p>
-                  </div>
-                )}
-                
-                {selectedSession.notes && (
-                  <div>
-                    <h4 className="font-semibold mb-2">Заметки:</h4>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      {selectedSession.notes}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-slate-500 dark:text-slate-400 mb-4">
-                  Тренировка не запланирована на этот день
-                </p>
-                <Button
-                  color="primary"
-                  onPress={handleCreateSession}
-                >
-                  Создать тренировку
-                </Button>
-              </div>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={onClose}>
-              Закрыть
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      {/* Training Session Modal */}
+      <TrainingSession
+        profileId={profileId}
+        currentProgram={currentProgram}
+        selectedDate={selectedDate}
+        isOpen={isOpen}
+        onClose={onClose}
+        onSessionUpdate={loadSessions}
+      />
     </div>
   )
 }

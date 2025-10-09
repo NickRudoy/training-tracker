@@ -1,6 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react'
-import { Button, Card, CardBody, CardHeader, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Input, Select, SelectItem, Chip, Spinner, Textarea } from '@heroui/react'
+import { Button, Card, CardBody, CardHeader, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Input, Select, SelectItem, Chip, Spinner, Textarea } from '@heroui/react'
+import UiModal from './UiModal'
 import axios from 'axios'
 
 const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080' })
@@ -47,6 +48,18 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
   const [selectedDay, setSelectedDay] = useState<number>(1) // 1-7 (понедельник-воскресенье)
   const { isOpen, onOpen, onClose } = useDisclosure()
   const [editingExercise, setEditingExercise] = useState<ProgramExercise | null>(null)
+  const {
+    isOpen: isProgramEditOpen,
+    onOpen: onOpenProgramEdit,
+    onClose: onCloseProgramEdit
+  } = useDisclosure()
+  const [programForm, setProgramForm] = useState({
+    name: '',
+    description: '',
+    startDate: '',
+    endDate: '',
+    isActive: true,
+  })
 
   const dayNames = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
 
@@ -90,9 +103,93 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
       const newPrograms = [...programs, response.data]
       onProgramsUpdate(newPrograms)
       onProgramChange(response.data)
+
+      // Открываем модал редактирования сразу после создания
+      setProgramForm({
+        name: response.data.name || '',
+        description: response.data.description || '',
+        startDate: response.data.startDate?.split('T')[0] || startDate.toISOString().split('T')[0],
+        endDate: response.data.endDate?.split('T')[0] || endDate.toISOString().split('T')[0],
+        isActive: true,
+      })
+      onOpenProgramEdit()
     } catch (err: any) {
       console.error('Failed to create program:', err)
       setError(err?.response?.data?.error || 'Ошибка создания программы')
+    }
+  }
+
+  const openEditProgram = () => {
+    if (!currentProgram) return
+    setProgramForm({
+      name: currentProgram.name || '',
+      description: currentProgram.description || '',
+      startDate: (currentProgram.startDate || '').toString().split('T')[0],
+      endDate: (currentProgram.endDate || '').toString().split('T')[0],
+      isActive: !!currentProgram.isActive,
+    })
+    onOpenProgramEdit()
+  }
+
+  const saveProgram = async () => {
+    if (!currentProgram) return
+    try {
+      const response = await api.put(`/api/profiles/${profileId}/programs/${currentProgram.id}`, {
+        name: programForm.name,
+        description: programForm.description,
+        startDate: programForm.startDate,
+        endDate: programForm.endDate,
+        isActive: programForm.isActive,
+      })
+      const updated = response.data
+      // Если сделали активной — деактивируем остальные и активируем текущую локально
+      const updatedPrograms = programs.map(p => {
+        if (p.id === updated.id) {
+          return updated
+        }
+        return programForm.isActive ? { ...p, isActive: false } : p
+      })
+      onProgramsUpdate(updatedPrograms)
+      onProgramChange(updated)
+      onCloseProgramEdit()
+    } catch (err: any) {
+      console.error('Failed to update program:', err)
+      setError(err?.response?.data?.error || 'Ошибка обновления программы')
+    }
+  }
+
+  const deleteProgram = async () => {
+    if (!currentProgram) return
+    const ok = typeof window !== 'undefined' ? window.confirm('Удалить текущую программу?') : true
+    if (!ok) return
+    try {
+      await api.delete(`/api/profiles/${profileId}/programs/${currentProgram.id}`)
+      const remaining = programs.filter(p => p.id !== currentProgram.id)
+      onProgramsUpdate(remaining)
+      onProgramChange(remaining[0] || null)
+    } catch (err: any) {
+      console.error('Failed to delete program:', err)
+      setError(err?.response?.data?.error || 'Ошибка удаления программы')
+    }
+  }
+
+  const activateProgram = async () => {
+    if (!currentProgram) return
+    try {
+      const response = await api.put(`/api/profiles/${profileId}/programs/${currentProgram.id}`, {
+        name: currentProgram.name,
+        description: currentProgram.description,
+        startDate: (currentProgram.startDate || '').toString().split('T')[0],
+        endDate: (currentProgram.endDate || '').toString().split('T')[0],
+        isActive: true,
+      })
+      const updated = response.data
+      const updatedPrograms = programs.map(p => p.id === updated.id ? updated : { ...p, isActive: false })
+      onProgramsUpdate(updatedPrograms)
+      onProgramChange(updated)
+    } catch (err: any) {
+      console.error('Failed to activate program:', err)
+      setError(err?.response?.data?.error || 'Ошибка активации программы')
     }
   }
 
@@ -245,14 +342,12 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
         </div>
         
         <div className="flex gap-2">
-          {!currentProgram && (
-            <Button
-              color="primary"
-              onPress={handleCreateProgram}
-            >
-              Создать программу
-            </Button>
-          )}
+          <Button
+            color="primary"
+            onPress={handleCreateProgram}
+          >
+            {currentProgram ? 'Новая программа' : 'Создать программу'}
+          </Button>
           {currentProgram && (
             <Button
               color="success"
@@ -263,6 +358,33 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
           )}
         </div>
       </div>
+
+      {/* Program Selector */}
+      {programs.length > 0 && (
+        <Card>
+          <CardBody>
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">Программа:</span>
+              <Select
+                placeholder="Выберите программу"
+                selectedKeys={currentProgram ? [currentProgram.id?.toString() || ''] : []}
+                onSelectionChange={(keys) => {
+                  const selectedId = Array.from(keys)[0] as string
+                  const program = programs.find(p => p.id?.toString() === selectedId)
+                  onProgramChange(program || null)
+                }}
+                className="max-w-xs"
+              >
+                {programs.map((program) => (
+                  <SelectItem key={program.id?.toString() || ''} value={program.id?.toString() || ''}>
+                    {program.name}
+                  </SelectItem>
+                ))}
+              </Select>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       {/* Error */}
       {error && (
@@ -306,9 +428,16 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
                     {currentProgram.description || 'Без описания'}
                   </p>
                 </div>
-                <Chip color="primary" variant="flat">
-                  Активная
-                </Chip>
+                <div className="flex items-center gap-2">
+                  <Chip color="primary" variant="flat">
+                    {currentProgram.isActive ? 'Активная' : 'Неактивная'}
+                  </Chip>
+                  {!currentProgram.isActive && (
+                    <Button size="sm" color="primary" variant="flat" onPress={activateProgram}>Сделать активной</Button>
+                  )}
+                  <Button size="sm" variant="light" onPress={openEditProgram}>Редактировать</Button>
+                  <Button size="sm" color="danger" variant="flat" onPress={deleteProgram}>Удалить</Button>
+                </div>
               </div>
             </CardHeader>
           </Card>
@@ -427,18 +556,23 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
       )}
 
       {/* Exercise Edit Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="2xl">
+      <UiModal 
+        isOpen={isOpen} 
+        onClose={onClose} 
+        size="2xl"
+      >
         <ModalContent>
-          <ModalHeader>
-            <h3 className="text-xl font-bold">
+          <ModalHeader className="flex items-center gap-4 pb-6 border-b border-slate-200 dark:border-slate-700">
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
               {editingExercise?.id ? 'Редактировать упражнение' : 'Добавить упражнение'}
             </h3>
           </ModalHeader>
-          <ModalBody>
+          <ModalBody className="pt-6">
             {editingExercise && (
               <div className="space-y-4">
                 <Select
                   label="Упражнение"
+                  labelPlacement="outside"
                   placeholder="Выберите упражнение"
                   selectedKeys={editingExercise.exercise ? [editingExercise.exercise] : []}
                   onSelectionChange={(keys) => {
@@ -453,9 +587,10 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
                   ))}
                 </Select>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Input
                     label="Подходы"
+                    labelPlacement="outside"
                     type="number"
                     min="1"
                     value={editingExercise.sets.toString()}
@@ -463,6 +598,7 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
                   />
                   <Input
                     label="Повторы"
+                    labelPlacement="outside"
                     type="number"
                     min="1"
                     value={editingExercise.reps.toString()}
@@ -470,6 +606,7 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
                   />
                   <Input
                     label="Вес (кг)"
+                    labelPlacement="outside"
                     type="number"
                     min="0"
                     step="0.5"
@@ -480,6 +617,7 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
 
                 <Textarea
                   label="Заметки"
+                  labelPlacement="outside"
                   placeholder="Дополнительные заметки..."
                   value={editingExercise.notes}
                   onChange={(e) => setEditingExercise(prev => prev ? { ...prev, notes: e.target.value } : null)}
@@ -487,20 +625,95 @@ export default function ProgramPlanner({ profileId, programs, currentProgram, ex
               </div>
             )}
           </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={onClose}>
+          <ModalFooter className="pt-6 border-t border-slate-200 dark:border-slate-700">
+            <Button variant="light" onPress={onClose} className="h-11 px-6 font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300">
               Отмена
             </Button>
             <Button
               color="primary"
               onPress={handleSaveExercise}
               isDisabled={!editingExercise?.exercise}
+              className="h-11 px-8 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
             >
               {editingExercise?.id ? 'Сохранить' : 'Добавить'}
             </Button>
           </ModalFooter>
         </ModalContent>
-      </Modal>
+      </UiModal>
+
+      {/* Program Edit Modal */}
+      <UiModal 
+        isOpen={isProgramEditOpen} 
+        onClose={onCloseProgramEdit} 
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex items-center gap-4 pb-6 border-b border-slate-200 dark:border-slate-700">
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              Редактировать программу
+            </h3>
+          </ModalHeader>
+          <ModalBody className="pt-6">
+            <div className="space-y-4">
+              <Input
+                label="Название"
+                labelPlacement="outside"
+                placeholder="Введите название программы"
+                value={programForm.name}
+                onChange={(e) => setProgramForm(prev => ({ ...prev, name: e.target.value }))}
+              />
+              <Textarea
+                label="Описание"
+                labelPlacement="outside"
+                placeholder="Краткое описание программы"
+                value={programForm.description}
+                onChange={(e) => setProgramForm(prev => ({ ...prev, description: e.target.value }))}
+              />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Input
+                  label="Начало"
+                  labelPlacement="outside"
+                  type="date"
+                  value={programForm.startDate}
+                  onChange={(e) => setProgramForm(prev => ({ ...prev, startDate: e.target.value }))}
+                />
+                <Input
+                  label="Окончание"
+                  labelPlacement="outside"
+                  type="date"
+                  value={programForm.endDate}
+                  onChange={(e) => setProgramForm(prev => ({ ...prev, endDate: e.target.value }))}
+                />
+                <Select
+                  label="Статус"
+                  labelPlacement="outside"
+                  selectedKeys={[programForm.isActive ? 'active' : 'inactive']}
+                  onSelectionChange={(keys) => {
+                    const key = Array.from(keys)[0] as string
+                    setProgramForm(prev => ({ ...prev, isActive: key === 'active' }))
+                  }}
+                >
+                  <SelectItem key="active">Активная</SelectItem>
+                  <SelectItem key="inactive">Неактивная</SelectItem>
+                </Select>
+              </div>
+            </div>
+          </ModalBody>
+          <ModalFooter className="pt-6 border-t border-slate-200 dark:border-slate-700">
+            <Button variant="light" onPress={onCloseProgramEdit} className="h-11 px-6 font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300">
+              Отмена
+            </Button>
+            <Button
+              color="primary"
+              onPress={saveProgram}
+              isDisabled={!programForm.name}
+              className="h-11 px-8 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300"
+            >
+              Сохранить
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </UiModal>
     </div>
   )
 }

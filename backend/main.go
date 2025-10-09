@@ -267,8 +267,8 @@ type ProgramExercise struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	ProgramID uint      `json:"programId" gorm:"not null;index"`
 	Exercise  string    `json:"exercise" gorm:"not null"`
-	DayOfWeek int       `json:"dayOfWeek" gorm:"not null"` // 1-7 (понедельник-воскресенье)
-	Order     int       `json:"order" gorm:"column:exercise_order;not null"`     // порядок в дне
+	DayOfWeek int       `json:"dayOfWeek" gorm:"not null"`              // 1-7 (понедельник-воскресенье)
+	Order     int       `json:"order" gorm:"column:\"order\";not null"` // порядок в дне (quoted reserved word)
 	Sets      int       `json:"sets" gorm:"not null"`
 	Reps      int       `json:"reps" gorm:"not null"`
 	Weight    float64   `json:"weight" gorm:"not null"`
@@ -291,6 +291,12 @@ type ProgramSession struct {
 // ProgramSessionWithExercises - сессия с упражнениями
 type ProgramSessionWithExercises struct {
 	ProgramSession
+	Exercises []ProgramExercise `json:"exercises"`
+}
+
+// PlanDay - сгенерированный план на конкретный день
+type PlanDay struct {
+	Date      string            `json:"date"`
 	Exercises []ProgramExercise `json:"exercises"`
 }
 
@@ -462,7 +468,17 @@ func main() {
 
 	// Step 1.5: Migrate new tables
 	if err := db.AutoMigrate(&BodyWeight{}, &PersonalRecord{}, &Goal{}, &TrainingSession{}, &TrainingSessionExercise{}, &TrainingProgram{}, &ProgramExercise{}, &ProgramSession{}); err != nil {
-		log.Fatalf("failed to migrate BodyWeight, PersonalRecord, Goal, TrainingSession, TrainingSessionExercise, TrainingProgram, ProgramExercise and ProgramSession: %v", err)
+		// Do not crash if column already exists; log and continue
+		log.Printf("warn: AutoMigrate returned error (continuing): %v", err)
+	}
+
+	// Cleanup: drop obsolete column exercise_order if present
+	if db.Migrator().HasColumn(&ProgramExercise{}, "exercise_order") {
+		if err := db.Migrator().DropColumn(&ProgramExercise{}, "exercise_order"); err != nil {
+			log.Printf("warn: failed to drop obsolete column exercise_order: %v", err)
+		} else {
+			log.Printf("info: dropped obsolete column exercise_order")
+		}
 	}
 
 	// Step 2: Seed default profile and exercises
@@ -591,6 +607,7 @@ func main() {
 			profiles.POST(":id/programs/:programId/exercises", func(c *gin.Context) { handleCreateProgramExercise(c, db) })
 			profiles.PUT(":id/programs/:programId/exercises/:exerciseId", func(c *gin.Context) { handleUpdateProgramExercise(c, db) })
 			profiles.DELETE(":id/programs/:programId/exercises/:exerciseId", func(c *gin.Context) { handleDeleteProgramExercise(c, db) })
+			profiles.GET(":id/programs/:programId/plan-days", func(c *gin.Context) { handleGetProgramPlanDays(c, db) })
 			profiles.GET(":id/programs/:programId/sessions", func(c *gin.Context) { handleGetProgramSessions(c, db) })
 			profiles.POST(":id/programs/:programId/sessions", func(c *gin.Context) { handleCreateProgramSession(c, db) })
 			profiles.PUT(":id/programs/:programId/sessions/:sessionId", func(c *gin.Context) { handleUpdateProgramSession(c, db) })
@@ -2400,7 +2417,7 @@ func handleGetProgramExercises(c *gin.Context, db *gorm.DB) {
 	}
 
 	var exercises []ProgramExercise
-	if err := db.Where("program_id = ?", programID).Order("day_of_week ASC, exercise_order ASC").Find(&exercises).Error; err != nil {
+	if err := db.Where("program_id = ?", programID).Order("day_of_week ASC, \"order\" ASC").Find(&exercises).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -2526,9 +2543,15 @@ func handleGetProgramSessions(c *gin.Context, db *gorm.DB) {
 
 	// Фильтрация по году и месяцу
 	if year != "" && month != "" {
-		startDate := fmt.Sprintf("%s-%s-01", year, month)
-		endDate := fmt.Sprintf("%s-%s-31", year, month)
-		query = query.Where("date >= ? AND date <= ?", startDate, endDate)
+		y, yErr := strconv.Atoi(year)
+		m, mErr := strconv.Atoi(month)
+		if yErr == nil && mErr == nil && m >= 1 && m <= 12 {
+			// Start at the first of the month
+			start := time.Date(y, time.Month(m), 1, 0, 0, 0, 0, time.UTC)
+			// End at the last valid day of the month by rolling to next month day 0
+			end := time.Date(y, time.Month(m)+1, 0, 23, 59, 59, int(time.Second-time.Nanosecond), time.UTC)
+			query = query.Where("date >= ? AND date <= ?", start, end)
+		}
 	}
 
 	var sessions []ProgramSession
@@ -2652,4 +2675,75 @@ func handleDeleteProgramSession(c *gin.Context, db *gorm.DB) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// handleGetProgramPlanDays - генерация плановых дней на месяц из правил по дням недели
+func handleGetProgramPlanDays(c *gin.Context, db *gorm.DB) {
+	profileID := c.Param("id")
+	programID := c.Param("programId")
+	year := c.Query("year")
+	month := c.Query("month")
+
+	// Проверяем, что программа принадлежит профилю
+	var program TrainingProgram
+	if err := db.Where("id = ? AND profile_id = ?", programID, profileID).First(&program).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Program not found"})
+		return
+	}
+
+	// Парсим год/месяц
+	y, yErr := strconv.Atoi(year)
+	m, mErr := strconv.Atoi(month)
+	if yErr != nil || mErr != nil || m < 1 || m > 12 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid year or month"})
+		return
+	}
+
+	// Получаем все упражнения программы (по дням недели)
+	var exercises []ProgramExercise
+	if err := db.Where("program_id = ?", programID).Order("day_of_week ASC, \"order\" ASC").Find(&exercises).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Строим карту деньНедели -> упражнения
+	dowToExercises := make(map[int][]ProgramExercise)
+	for _, ex := range exercises {
+		dowToExercises[ex.DayOfWeek] = append(dowToExercises[ex.DayOfWeek], ex)
+	}
+
+	// Диапазон месяца
+	startOfMonth := time.Date(y, time.Month(m), 1, 0, 0, 0, 0, time.UTC)
+	endOfMonth := startOfMonth.AddDate(0, 1, -1)
+
+	// Ограничиваем периодом программы
+	planStart := program.StartDate
+	planEnd := program.EndDate
+	if planStart.After(endOfMonth) || planEnd.Before(startOfMonth) {
+		c.JSON(http.StatusOK, []PlanDay{})
+		return
+	}
+	if planStart.Before(startOfMonth) {
+		planStart = startOfMonth
+	}
+	if planEnd.After(endOfMonth) {
+		planEnd = endOfMonth
+	}
+
+	// Генерируем дни: наш dayOfWeek = 1..7 (Mon..Sun). Go Weekday: 0=Sun..6=Sat.
+	var result []PlanDay
+	for d := planStart; !d.After(planEnd); d = d.AddDate(0, 0, 1) {
+		// Преобразуем к 1..7 (Mon..Sun)
+		weekday := int((int(d.Weekday())+6)%7 + 1)
+		dayExercises := dowToExercises[weekday]
+		if len(dayExercises) == 0 {
+			continue
+		}
+		result = append(result, PlanDay{
+			Date:      d.Format("2006-01-02"),
+			Exercises: dayExercises,
+		})
+	}
+
+	c.JSON(http.StatusOK, result)
 }

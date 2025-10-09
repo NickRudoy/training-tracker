@@ -299,14 +299,13 @@ export default function PersonalRecords({ profileId, exercises }: Props) {
         isOpen={isOpen} 
         onClose={onClose}
         placement="center"
-        backdrop="blur"
+        backdrop="opaque"
         classNames={{
-          backdrop: "bg-slate-900/50 backdrop-blur-sm",
           wrapper: "z-[9999]",
           base: "bg-white dark:bg-slate-900",
         }}
       >
-        <ModalContent>
+        <ModalContent className="bg-white dark:bg-slate-900">
           {(onClose) => (
             <>
               <ModalHeader className="flex items-center gap-4 pb-6 border-b border-slate-200 dark:border-slate-700">
